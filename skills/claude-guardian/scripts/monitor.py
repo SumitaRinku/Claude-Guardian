@@ -67,7 +67,8 @@ def validate_config(cfg):
     required = {'version', 'target', 'proxy', 'firewall', 'network', 'alerts'}
     if not isinstance(cfg, dict) or set(cfg) != required or cfg.get('version') != 1:
         raise MonitorError('配置格式不正确，请从随包模板重新填写。')
-    if not _text(cfg.get('target')) or cfg['target'] != platform.node():
+    # Host names may be fully qualified (macOS often is), so allow the DNS maximum of 253.
+    if not _text(cfg.get('target'), 253) or cfg['target'] != platform.node():
         raise MonitorError('配置与当前设备不匹配，请让 Agent 核对目标设备。')
     proxy, firewall = cfg.get('proxy'), cfg.get('firewall')
     network, alerts = cfg.get('network'), cfg.get('alerts')

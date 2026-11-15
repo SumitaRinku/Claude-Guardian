@@ -104,6 +104,19 @@ class Config(unittest.TestCase):
             with self.assertRaisesRegex(m.MonitorError, '设备'):
                 m.load_config(write_config(tmp, cfg))
 
+    def test_accepts_long_fully_qualified_host_names(self):
+        # Regression: a 64-character cap rejected the macOS CI runner's own host name, and would
+        # reject long fully qualified names on real Macs too.
+        long_name = ('runner-' + 'a' * 70 + '.local')
+        with tempfile.TemporaryDirectory() as folder, patch.object(m.platform, 'node', return_value=long_name):
+            tmp = Path(folder)
+            self.assertEqual(m.load_config(write_config(tmp, config(tmp)))['target'], long_name)
+        too_long = 'h' * 254
+        with tempfile.TemporaryDirectory() as folder, patch.object(m.platform, 'node', return_value=too_long):
+            tmp = Path(folder)
+            with self.assertRaisesRegex(m.MonitorError, '设备'):
+                m.load_config(write_config(tmp, config(tmp)))
+
     def test_rejects_relative_runtime_config(self):
         with tempfile.TemporaryDirectory() as folder:
             tmp = Path(folder)
