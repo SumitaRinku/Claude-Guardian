@@ -415,12 +415,14 @@ class Notifier(unittest.TestCase):
 
 class Launcher(unittest.TestCase):
     def test_desktop_launcher_keeps_monitor_alive(self):
-        argv = m.launcher_argv(Path('C:/private/monitor.json'), 0)
+        # The config path is passed through in the platform's own form (backslashes only on Windows).
+        config_path = Path('private') / 'monitor with space.json'
+        argv = m.launcher_argv(config_path, 0)
         self.assertIn('--tray', argv)
         self.assertIn('gui', argv)
         self.assertEqual(argv[argv.index('--idle-minutes') + 1], '0')
-        self.assertEqual(argv[argv.index('--config') + 1], 'C:\\private\\monitor.json')
-        self.assertEqual(m.launcher_argv(Path('C:/private/monitor.json'), 30)[-1], '30')
+        self.assertEqual(argv[argv.index('--config') + 1], str(config_path))
+        self.assertEqual(m.launcher_argv(config_path, 30)[-1], '30')
 
 
 class ProbeProcess(unittest.TestCase):
