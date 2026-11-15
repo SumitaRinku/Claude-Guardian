@@ -1,6 +1,7 @@
 """Exercise the read-only monitor at its boundaries; no real system queries, no network."""
 import importlib.util
 import json
+import os
 from pathlib import Path
 import platform
 import re
@@ -370,7 +371,14 @@ class Notifier(unittest.TestCase):
         tray = (ROOT / 'skills/claude-guardian/assets/monitor/tray.ps1').read_text(encoding='utf-8-sig')
         self.assertIn("$AppName = '" + m.APP_NAME + "'", tray)
         self.assertIn("$AppId = '" + m.APP_ID + "'", tray)
-        self.assertEqual(m.start_menu_shortcut().name, m.APP_NAME + '.lnk')
+        # APPDATA exists only on Windows; supply one so the path logic is checked on every platform.
+        with patch.dict(os.environ, {'APPDATA': str(self.dir)}):
+            shortcut = m.start_menu_shortcut()
+        self.assertEqual(shortcut.name, m.APP_NAME + '.lnk')
+        self.assertEqual(shortcut.parent.name, 'Programs')
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(m.MonitorError):
+                m.start_menu_shortcut()
         # The tray must not trust a registry-only identity: Windows drops those toasts silently.
         self.assertNotIn('AppUserModelId', tray)
         self.assertIn('Start Menu', tray)
