@@ -170,14 +170,14 @@ class Controller(unittest.TestCase):
         dest=Path(self.tmp.name)/'desktop with spaces'
         with patch.object(u.platform,'system',return_value='Darwin'):
             u.desktop(self.path,dest)
-            script=(dest/'Guardian Switch.app/Contents/MacOS/guardian-switch').read_text()
+            script=(dest/'Guardian Switch.app/Contents/MacOS/guardian-switch').read_text(encoding='utf-8')
             self.assertIn(' gui --config ',script)
             self.assertTrue((dest/'Guardian Switch.app/Contents/Resources/guardian.icns').is_file())
             with self.assertRaises(FileExistsError):u.desktop(self.path,dest)
         dest=Path(self.tmp.name)/'linux desktop'
         with patch.object(u.platform,'system',return_value='Linux'):
             u.desktop(self.path,dest)
-            self.assertIn('Terminal=false',(dest/'guardian-switch.desktop').read_text())
+            self.assertIn('Terminal=false',(dest/'guardian-switch.desktop').read_text(encoding='utf-8'))
 
     @unittest.skipUnless(os.name == 'nt', 'Windows shortcut and console encoding')
     def test_windows_desktop_cli_with_legacy_output_encoding(self):
@@ -222,7 +222,7 @@ function Get-NetFirewallInterfaceTypeFilter { process { [pscustomobject]@{Interf
 & SCRIPT -Action Status -Config CONFIG
 """.replace('MODE',mode).replace('ENABLED','$true' if expected=='on' else '$false').replace('SCRIPT',u.ps_quote(k.WINDOWS)).replace('CONFIG',u.ps_quote(self.path))
             fixture=Path(self.tmp.name)/'fixture.ps1';fixture.write_text(body,encoding='utf-8-sig')
-            completed=subprocess.run([executable,'-NoProfile','-File',str(fixture)],capture_output=True,text=True,encoding='utf-8',errors='replace')
+            completed=subprocess.run([executable,'-NoProfile','-ExecutionPolicy','Bypass','-File',str(fixture)],capture_output=True,text=True,encoding='utf-8',errors='replace')
             self.assertEqual(completed.returncode,0,completed.stderr)
             state = json.loads(completed.stdout.lstrip('\ufeff'))
             self.assertEqual(state['protection'],expected)

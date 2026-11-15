@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CCGuard</title>
+<link rel="icon" href="icon.png"><link rel="stylesheet" href="monitor.css"></head>
+<body><main>
+<header><div class="brand"><img src="icon.png" alt="" width="34" height="34"><span>Guardian <b>Monitor</b></span></div>
+<button id="notify" class="quiet" type="button">开启通知</button></header>
+
+<section class="hero" aria-live="polite">
+  <div class="eyebrow">本机防护 · 实时</div>
+  <h1 id="overall">正在读取…</h1>
+  <p id="summary">读取本机状态，不联网、不改系统。</p>
+  <p id="checked" class="meta">尚未读取</p>
+</section>
+
+<section id="checks" class="grid" aria-label="检查项"></section>
+
+<footer>
+  <p class="footnote">只读监测：不修改防火墙、不重启代理、不发起任何联网请求。</p>
+  <p class="footnote">关闭本页面不会关闭防护；以 <code>--tray</code> 启动时托盘会继续提醒。</p>
+  <p class="footnote">告警只说明本机状态与配置，不代替出口与账号验收。</p>
+</footer>
+</main><script src="monitor.js"></script></body></html>

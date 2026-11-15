@@ -8,3 +8,6 @@ private-inputs/
 .DS_Store
 .claude/settings.local.json
 .workbuddy/
+# User-supplied Anthropic fonts: used locally by the monitor panel, not redistributable,
+# so they never enter a public fork. The panel falls back to system fonts without them.
+fonts/

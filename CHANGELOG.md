@@ -1,5 +1,44 @@
 # 版本记录
 
+## 监测面板缺陷修复与 Windows 本地测试可移植（2026-11-15，MONITOR-FIX-20261115）
+
+- 修复面板「保存到配置」写坏配置：`apply_settings` 写入的 `alerts.paused` 被 `load_config` 的严格键集拒绝，而文件已先被覆盖，下次启动即失败；保存失败分支还会在设置校验失败后继续写文件。现 `paused` 为可选布尔值，新增 `validate_config` 供保存前完整校验，校验通过才原子替换（临时文件 + `os.replace`），失败时原配置不动
+- 修复日志页在累计 300 条后停止刷新（按缓冲区长度判断变化，满后长度恒定）；改用单调计数
+- 卡片类重写了 tkinter 的 `Misc.update()`，改名 `set_state`，状态不变时不重绘
+- 未启动托盘时关闭对话框不再提供「隐藏到托盘」，避免窗口隐藏后无法找回、进程在后台常驻；对话框支持 Esc／关闭按钮取消
+- 「立即采集」「应用」「保存」不再在界面线程同步跑 PowerShell 采集（最长 20 秒卡死）；采集串行化，进行中时不重复启动；首轮采集移到后台，窗口不等待采集即显示
+- 托盘改从 `state.json` 读取当前采集间隔与冷却：面板把间隔调大后不再误报「监测已停止更新」，冷却修改即时生效
+- 运行配置解析支持 `dns-hijack: [any:53]` 行内列表，端口按 `:53` 精确匹配（`any:5353` 不再算接管）；单个 DNS 服务器被 PowerShell 5.1 扁平化为字符串时也能比较；默认路由同时接受实际识别到的 TUN 网卡别名；面板退出时清理临时状态目录；状态胶囊在首轮采集前显示「正在读取…」
+- 测试可移植：Windows 原生夹具调用 PowerShell 时显式 `-ExecutionPolicy Bypass`（仅本进程，不改系统策略），本机策略为 Restricted 时不再整批失败；`test_killswitch` 读取生成文件显式 UTF-8，非 UTF-8 区域设置（GBK）下不再解码失败。`windows-network-transaction.md` 的运行命令同步补 `-ExecutionPolicy Bypass`，与脚本内部启动步骤的方式一致
+- 托盘与窗口图标改为状态色盾牌（绿 ✓／橙 !／红 ✕／灰 —），不再使用 Claude 标志加角标；`tools/generate_monitor_icon.ps1` 按尺寸在像素网格上直接绘制，新增 `-Style shield|brand|lamp` 与 `-PreviewPath` 预览图。修正生成器两处问题：PowerShell 展开字节数组曾导致只写出 125 字节的空图标；256 以下帧改为经典 32 位 DIB，PNG 小帧经 `System.Drawing.Icon`（托盘所用）解码为噪点，现仅 256 帧用 PNG。经 `System.Drawing.Icon` 实际加载 16px 帧核对显示正常
+- 程序更名为 CCGuard（窗口标题、托盘悬停文字、通知署名、网页标题与桌面入口名称）。通知署名：托盘运行在 PowerShell 中，Windows 把通知署为「Windows PowerShell」。新增可选 `register-notifier --config`／`unregister-notifier`／`notifier-status`：只在当前用户开始菜单创建 `CCGuard.lnk`，写入 `System.AppUserModel.ID=CCGuard.Monitor` 并以 `gui --tray` 启动面板；不需要管理员，同名但身份不符的快捷方式拒绝覆盖或删除。先尝试过只写 `HKCU` `AppUserModelId` 注册表项：Windows 11 26300 实测 Toast 被静默丢弃且接口报告成功，会导致告警丢失，已撤销该方案与本机注册。托盘仅在快捷方式存在且通知设置未被显式关闭时发 Toast（首次发送前 Setting 为空，本机实测；只认 Enabled 会导致永远发不出第一条）（标题与正文 XML 转义），否则回退气泡；托盘按系统小图标尺寸加载 ICO 帧。新增 `assets/monitor/notifier-shortcut.ps1` 并加入显式打包清单。测试：参数与拒绝路径用记录型 runner，Windows 上在临时目录真实创建、读回身份、拒删他人快捷方式并删除；tray.ps1 经 PowerShell 解析器检查。真机：Windows 11 26300 上注册后，用托盘代码发送的 Toast 显示为 CCGuard 署名与盾牌图标（用户目视确认）；其他 Windows 版本未验证
+- 面板字体：此前只读取 `fonts/` 顶层并按文件名猜字体名，用户放入的 Anthropic Sans 静态字体（.otf）从未被使用。现把该文件夹移入 `fonts/Anthropic Sans/`，递归读取 .ttf/.otf，并从字体 name 表读取真实字体名；正文优先 Anthropic Sans Text（真实粗体），其次 Web Text。`fonts/` 加入 `.gitignore`（字体不可再分发），测试改用合成字体文件，不依赖仓库里有字体
+- 面板窗口图标：标题栏一直是系统默认窗口图标——Tk `iconbitmap` 读不了 ICO 中的 PNG 256 帧而被静默忽略，`iconphoto(True)` 只替换类图标。现由 `logo-<状态>.png`（生成器新增 128px）经 `iconphoto(False)` 设到窗口本身，随状态变色；页眉新增同色盾牌 logo；进程设置 `CCGuard.Monitor` 身份，任务栏单独分组。截图核对：标题栏与页眉均显示盾牌，`WM_GETICON` 返回窗口图标句柄（修复前为空）
+- 清理产品代码未使用导入（`killswitch.py` 的 `shutil`、`status_dashboard.py` 的 `json`）；`monitor.md` 修正卡片配色描述并补充保存、关闭与托盘同步行为
+- 验证：Windows 11 本机，临时 venv 安装 `requirements-dev.txt`（PyYAML 6.0.3），完整 unittest 1643 项通过（442 项为 POSIX 专属跳过）；修复前同环境 18 failures／1 error。新增回归覆盖保存后可重新加载（含 `paused`）、非法配置不落盘、日志计数、关闭选项、采集串行、行内 hijack 与端口精确匹配、单 DNS 字符串、TUN 别名路由。面板以假采集数据实际启动 3 秒无回调异常。未在真实代理／防火墙环境验收托盘行为（not_run）；macOS／Linux 未在本机运行
+- 风险与回滚：仅影响监测面板、托盘脚本、测试与文档；回滚使用普通 revert
+
+## 监测面板改为原生窗口与状态色图标（2026-11-14，ADR-076 补充）
+
+- 新增 `scripts/monitor_gui.py` 与 `gui` 入口：tkinter 独立窗口（状态卡片／状态跃迁日志／设置），托盘负责系统气泡通知，不再依赖浏览器；`serve` 保留为本地网页备选
+- 图标改为四色状态（绿 ok、橙 degraded、红 fail、灰 unknown）的**大圆灯**标记 + 多尺寸（16/20/24/32/48/64/256），托盘 16px 不再模糊；托盘与窗口图标随整体状态切换，悬停文字显示当前状态；生成器 `tools/generate_monitor_icon.ps1` 用 GDI+，运行时不引入依赖
+- 面板启用 Per-Monitor V2 DPI 感知并按系统缩放设置窗口尺寸与字体，解决高分屏文字发虚；卡片区可滚动，窄屏不被裁切
+- 界面改用仓库 `fonts/` 里的 Anthropic 字体（进程内 `AddFontResourceExW` 私有注册，不写入系统），缺失时回退系统字体；版式改为衬线标题、分段导航、圆角卡片与状态胶囊
+- 关闭窗口改为三选：隐藏到托盘（监测与气泡提醒继续）、直接关闭、取消；隐藏后双击托盘或菜单「打开面板」通过状态目录里的 `show.request` 恢复窗口；托盘退出时窗口自动恢复显示
+- 设置页支持采集间隔、通知冷却、通知项与暂停提醒；暂停写入 `state.json` 的 `paused` 字段，托盘同步生效
+- 边界不变：只读、不联网、不需要管理员、不建自启／服务／计划任务；通知仍只含状态与检查项名称
+- 验证：`tests.test_monitor` 28 项、`tests.test_monitor_gui` 12 项、`test_guides` 65 项共 105 项通过；`compileall`、章节索引重新生成、显式清单打包通过（SHA-256 `c48f07efd62240821a3261f303bce66ac09f07254364f8d56aef7a4c1ea463fe`）。真机：DPI 感知截图复核窗口 1167×921、状态胶囊与圆角卡片完整；关闭弹窗显示三按钮且无裁切；托盘写入的 `show.request` 被面板接收并删除
+- 风险与回滚：缺少 tkinter 时提示改用 `serve`；气泡仍可能被专注助手抑制。回滚使用普通 `revert`
+
+## 本机只读监测面板与系统通知（2026-11-14，ADR-076）
+
+- 新增 `scripts/monitor.py`：`check` 单次 JSON、`serve` 本地面板（`--tray` 同时启动托盘）、`desktop` 生成入口。采集代理核心进程、TUN 网卡、默认路由、三档防火墙默认出站、`guardian-*` 规则数量、运行配置白名单键（`ipv6`、`tun.enable`、`tun.strict-route`、`dns-hijack`、`enhanced-mode`）、物理网卡 DNS 与 IPv6 绑定；查询失败、权限不足与缺失数据记 `unknown`
+- 新增 `assets/monitor/` 与 `references/monitor.md`：面板沿用 Switch 的 `127.0.0.1`、随机会话令牌、`Host`／`Origin`／`Sec-Fetch-Site` 校验与严格 CSP；托盘用 WinForms 气泡通知，按状态跃迁触发并带冷却，恢复时也提示；监测超过 3 个采集周期未更新时提示「监测已停止更新」。桌面入口固定带 `--tray --idle-minutes 0`，关掉页面后托盘继续提醒
+- 边界：只读、不联网、不需要管理员、不建自启／服务／计划任务；通知只含状态与检查项名称，不含 IP、路径、节点或配置值；v1 仅 Windows，其他平台记 `unknown`；监测通过不替代出口、DNS 与账号验收
+- 验证：`tests.test_monitor` 27 项、`node tests/monitor-interaction.cjs`、`test_guides` 65 项、`test_status_dashboard`／`test_egress_verifier`／`test_network_check`／`test_update_check` 89 项、打包与安装类 34 项通过；`compileall`、章节索引重新生成、显式清单可复现打包通过（SHA-256 `659a437dfcea4dc0ff59dc5a442d9d377d78089ac677dd19483d7ff64e7ebd95`）。真机：`check` 十项 `ok`，面板启动后页面与 `/state` 均返回 200，托盘进程正常驻留，采集子进程的 `MainWindowHandle` 为 0（无控制台窗口闪现）；桌面快捷方式启动后 `pythonw` 监听 `127.0.0.1` 并带起托盘进程。停止代理核心的告警提示留待用户现场确认
+- 完整套件在本机为 87 failures／79 errors，全部来自环境而非本次改动：缺 PyYAML（`test_agent_rules_task`、`test_config_edit_plan`、`test_rules_extension_plan`、`test_clash_verge_258`）与 PowerShell 执行策略 Restricted（`test_windows_network_transaction`、`test_windows_update_coverage`、`test_killswitch`）；未为此修改本机环境
+- 风险与回滚：通知可能被系统专注助手抑制，托盘需要进程存活；`unknown` 不等于正常；配置漂移会产生降级告警。回滚使用普通 `revert`，不涉及目标机系统设置
+
 ## Partners 新增 Mac mini 广告（2026-11-14，README-PARTNER-MAC-MINI）
 
 - README Partners 第二行新增海外 Mac mini 托管广告，链接到 `https://api.dpccgaming.xyz/guardian/services?category=mac_mini`；提供的图片裁剪多余留白、居中后压缩为与现有广告相同的 480×140 PNG，显示宽度 380

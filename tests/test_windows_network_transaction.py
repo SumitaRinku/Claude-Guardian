@@ -115,13 +115,13 @@ switch ($Operation) {
         (self.directory / 'state.json').write_text(json.dumps(state), encoding='utf-8')
 
     def state(self):
-        result = subprocess.run([PS, '-NoProfile', '-File', str(self.worker), '-Action', 'Status'],
+        result = subprocess.run([PS, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(self.worker), '-Action', 'Status'],
                                 capture_output=True, text=True, encoding='utf-8', timeout=15)
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout.lstrip('\ufeff'))
 
     def launch(self):
-        p = subprocess.Popen([PS, '-NoProfile', '-File', str(self.worker), '-Action', 'Worker'],
+        p = subprocess.Popen([PS, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(self.worker), '-Action', 'Worker'],
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=(os.name != 'nt'))
         self.processes.append(p)
         return p
@@ -142,7 +142,7 @@ switch ($Operation) {
         self.make_state()
         # The short-lived launcher represents the Agent's shell. Worker outlives it.
         code = 'import subprocess,sys; p=subprocess.Popen(sys.argv[1:], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=(sys.platform!="win32")); print(p.pid)'
-        launched = subprocess.run([sys.executable, '-c', code, PS, '-NoProfile', '-File', str(self.worker), '-Action', 'Worker'], capture_output=True, text=True, check=True, timeout=10)
+        launched = subprocess.run([sys.executable, '-c', code, PS, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(self.worker), '-Action', 'Worker'], capture_output=True, text=True, check=True, timeout=10)
         self.detached_pids.append(int(launched.stdout.strip()))
         state = self.wait_phase({'restored'})
         self.assertEqual(state['restored'], ['proxy', 'dns'])
@@ -232,12 +232,12 @@ switch ($Operation) {
                                        ('timeout_seconds', 0, 2), ('timeout_seconds', '60', 2)]:
             candidate = dict(plan, **{field: value})
             plan_path.write_text(json.dumps(candidate), encoding='utf-8')
-            result = subprocess.run([PS, '-NoProfile', '-File', str(probe), '-Plan', str(plan_path)], capture_output=True, timeout=15)
+            result = subprocess.run([PS, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(probe), '-Plan', str(plan_path)], capture_output=True, timeout=15)
             self.assertEqual(result.returncode, expected, (field, value, result.stderr))
         for script in ('../dns.ps1', 'worker.ps1', 'https://example.invalid/a.ps1'):
             plan['steps'][0]['script'] = script
             plan_path.write_text(json.dumps(plan), encoding='utf-8')
-            self.assertEqual(subprocess.run([PS, '-NoProfile', '-File', str(probe), '-Plan', str(plan_path)], capture_output=True, timeout=15).returncode, 2)
+            self.assertEqual(subprocess.run([PS, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(probe), '-Plan', str(plan_path)], capture_output=True, timeout=15).returncode, 2)
 
     @unittest.skipUnless(os.name == 'nt', 'Windows process-tree termination')
     def test_timed_out_step_is_stopped_before_restore(self):

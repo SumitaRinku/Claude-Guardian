@@ -323,6 +323,20 @@ macOS DNS、IPv6 与 WebRTC：单机经验的通用提炼（8 节）
 - [Android 要拔掉 SIM 卡](mobile-guidance.md#android-要拔掉-sim-卡)
 - [与本项目其他规则的关系](mobile-guidance.md#与本项目其他规则的关系)
 
+## monitor.md
+
+实时监测与通知（本机只读面板）（9 节）
+
+- [用途与边界](monitor.md#用途与边界)
+- [支持范围](monitor.md#支持范围)
+- [首次配置](monitor.md#首次配置)
+- [启动与入口](monitor.md#启动与入口)
+- [检查项与判定](monitor.md#检查项与判定)
+- [通知](monitor.md#通知)
+- [故障时怎么办](monitor.md#故障时怎么办)
+- [不做的事](monitor.md#不做的事)
+- [验证与已知限制](monitor.md#验证与已知限制)
+
 ## network-and-remedies.md
 
 M04/M05/M10: network evidence and offline remedies（6 节）
@@ -372,11 +386,12 @@ M01/M06–M09: independent environment routes（31 节）
 
 ## scripts-index.md
 
-脚本索引（8 节）
+脚本索引（9 节）
 
 - [访谈与评估](scripts-index.md#访谈与评估)
 - [检查与报告（只读）](scripts-index.md#检查与报告只读)
 - [统一防直连开关](scripts-index.md#统一防直连开关)
+- [实时监测与通知](scripts-index.md#实时监测与通知)
 - [网络检测的其他部分](scripts-index.md#网络检测的其他部分)
 - [修复计划与规则（离线，不写入）](scripts-index.md#修复计划与规则离线不写入)
 - [写入与恢复（有事务和备份）](scripts-index.md#写入与恢复有事务和备份)

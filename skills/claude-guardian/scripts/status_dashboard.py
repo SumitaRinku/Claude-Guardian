@@ -3,7 +3,6 @@
 import argparse
 from datetime import datetime, timezone
 from html import escape
-import json
 import re
 
 from traffic_policy import policy_projection

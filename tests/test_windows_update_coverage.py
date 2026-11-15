@@ -54,7 +54,7 @@ class WindowsUpdateCoverage(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             script = Path(directory) / 'fixture.ps1'
             script.write_text("$ErrorActionPreference='Stop'\n" + body, encoding='utf-8-sig')
-            result = subprocess.run([PS, '-NoProfile', '-File', str(script)], capture_output=True,
+            result = subprocess.run([PS, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(script)], capture_output=True,
                                     text=True, encoding='utf-8', errors='replace', timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return json.loads(result.stdout.lstrip('\ufeff'))

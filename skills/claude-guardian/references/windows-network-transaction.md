@@ -16,10 +16,10 @@
 
 ```powershell
 $tx = '.\assets\killswitch\windows-network-transaction.ps1'
-powershell.exe -NoProfile -File $tx -Action Start -Plan C:\private\network-plan.json
-powershell.exe -NoProfile -File $tx -Action Status
-powershell.exe -NoProfile -File $tx -Action Commit
-powershell.exe -NoProfile -File $tx -Action Recover
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tx -Action Start -Plan C:\private\network-plan.json
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tx -Action Status
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tx -Action Commit
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tx -Action Recover
 ```
 
 计划示例：步骤脚本与 JSON 放在同一目录，下面的脚本须先实现并审核。

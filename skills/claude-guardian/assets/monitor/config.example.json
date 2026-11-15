@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "target": "REPLACE_WITH_HOSTNAME",
+  "proxy": {
+    "process_names": ["FlClashCore"],
+    "tun_adapter": "FlClash",
+    "runtime_config": "C:\\Users\\REPLACE_WITH_USER\\AppData\\Roaming\\com.follow\\clash\\config.yaml"
+  },
+  "firewall": {
+    "expect_default_block": true,
+    "allow_rule_prefix": "guardian-",
+    "min_allow_rules": 1
+  },
+  "network": {
+    "expect_dns_servers": ["198.18.0.2"],
+    "expect_ipv6_disabled": true
+  },
+  "alerts": {
+    "cooldown_seconds": 120,
+    "notify_states": ["fail", "degraded"],
+    "interval_seconds": 5
+  }
+}
