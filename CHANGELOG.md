@@ -7,7 +7,8 @@
 - 运行配置解析扩展：保留 Clash/Mihomo YAML 白名单键；新增 sing-box JSON（顶层 `tun` 或 `inbounds[type=tun]`、`enable`、`strict_route`、`inet4/inet6_address` 或 1.11+ 的 `address` 列表、`dns.strategy`、`route.rules` 的 `hijack-dns`）与 Xray JSON（`dns.queryStrategy`、`routing.domainStrategy`、`sniffing.destOverride` 的 `dns`）。格式按扩展名与顶层键自动识别，也可强制指定；读不出的项记 `unknown`
 - 物理网卡识别排除自动检测到的 TUN（包括 Mihomo、sing-tun、Hiddify 等描述），避免 TUN 的 DNS／IPv6 行干扰 `dns_servers` 与 `os_ipv6`
 - 文档：`references/monitor.md` 增加客户端预设、TUN 自动识别、常见运行配置位置与各格式可读字段；`config.example.json` 展示新字段；README 增加 CCGuard 简介
-- 验证：Windows 11 本机，`python -m unittest tests.test_monitor tests.test_monitor_gui -v` 84 项通过；`node tests/monitor-interaction.cjs` 通过；`python -m compileall -q skills/claude-guardian/scripts` 通过。新增回归覆盖预设优先级、空进程名回退、TUN 自动识别与精确名优先、TUN 不计入物理网卡、sing-box／Xray JSON、格式强制与 `detect`。其他客户端与版本未逐项真机验收（not_run），只按公开配置结构做合成测试
+- 验证：Windows 11 本机，`python -m unittest tests.test_monitor tests.test_monitor_gui -v` 84 项通过；`node tests/monitor-interaction.cjs` 通过；`python -m compileall -q skills/claude-guardian/scripts` 通过。完整套件 1676 项通过（442 项 POSIX 专属跳过）。push CI run `43845048351` 的 scope、Linux、macOS、Windows 与 Python 3.10 Linux 全部通过。新增回归覆盖预设优先级、空进程名回退、TUN 自动识别与精确名优先、TUN 不计入物理网卡、sing-box／Xray JSON、格式强制与 `detect`。其他客户端与版本未逐项真机验收（not_run），只按公开配置结构做合成测试
+- 发布：`v0.2.0`（提交 `a5434b9`），Release 资产 `claude-guardian-0.2.0.zip`，SHA-256 `b40576574c6a1490e01c81dc8f065c3578de5e29a4db9c08d2789af6ac6c582a`
 - 风险与回滚：自动识别可能因客户端重命名误判，可用显式字段覆盖；`unknown` 不等于通过。仅影响监测脚本、配置模板、测试与文档；回滚使用普通 revert
 
 ## 监测面板缺陷修复与 Windows 本地测试可移植（2026-11-15，MONITOR-FIX-20261115）
