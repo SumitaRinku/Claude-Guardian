@@ -36,6 +36,7 @@ CCGuard 是本仓库在 [Claude-Guardian](https://github.com/DUNHKpcc/Claude-Gua
 | 能力 | 说明 |
 | --- | --- |
 | **10 项实时检查** | 代理核心、TUN、默认路由、防火墙、放行规则、核心 IPv6 / 严格路由 / DNS 接管、物理网卡 DNS / IPv6 |
+| **双击启动** | Release 包解压后双击 `CCGuard.pyw`（或 `CCGuard.cmd`），首次自动生成配置并打开面板；再次双击不会开第二个窗口 |
 | **一条命令启动** | `quickstart` 自动识别主机、客户端和 TUN，生成配置并打开面板；已有配置不覆盖 |
 | **状态色盾牌** | 绿 ✓ 正常、橙 ! 降级、红 ✕ 失效、灰 — 未知；窗口、托盘与网页标题同步 |
 | **新界面** | 左侧栏导航 + 状态卡片 + ttk 设置控件；中文字体回退到 `Microsoft YaHei UI`，日志不再用无中文字形的等宽字体 |
@@ -68,24 +69,31 @@ CCGuard 是本仓库在 [Claude-Guardian](https://github.com/DUNHKpcc/Claude-Gua
 
 ### 2. 获取
 
-**方式 A：克隆仓库（推荐，含最新界面与自启）**
+**方式 A：Release 包（推荐，双击即用）**
+
+下载 [`claude-guardian-0.3.0.zip`](https://github.com/SumitaRinku/CCguard/releases/download/v0.3.0/claude-guardian-0.3.0.zip)，解压后得到 `claude-guardian\` 目录。双击其中的 `CCGuard.pyw` 或 `CCGuard.cmd` 即可。
+
+**方式 B：克隆仓库（最新源码）**
 
 ```powershell
 git clone https://github.com/SumitaRinku/CCguard.git
 ```
 
-仓库内的监测入口是 `skills\claude-guardian\scripts\monitor.py`。一键启动、开机自启和新界面在 main 分支。
+仓库根目录也可以直接双击 `CCGuard.pyw` / `CCGuard.cmd`；监测入口是 `skills\claude-guardian\scripts\monitor.py`。
 
-**方式 B：Release 包（v0.2.0）**
+### 3. 双击启动（推荐）
 
-下载 [`claude-guardian-0.2.0.zip`](https://github.com/SumitaRinku/CCguard/releases/download/v0.2.0/claude-guardian-0.2.0.zip)，解压后得到 `claude-guardian\` 目录。包内是完整的 Claude-Guardian Skill，监测入口是 `claude-guardian\scripts\monitor.py`。
+解压 Release 包后，进入 `claude-guardian\`，双击：
 
-> v0.2.0 包含多客户端监测；一键启动、开机自启和新界面在 main 分支，下一版发布后才会进入安装包。需要这些功能请用仓库方式。
+- `CCGuard.pyw`：无控制台，推荐；需要 `.pyw` 关联到 Python。
+- `CCGuard.cmd`：找不到 `pythonw` / `pyw` 时回退到 `python` / `py`；会短暂闪一下控制台。
 
-### 3. 一条命令启动（推荐）
+首次运行会自动生成 `%LOCALAPPDATA%\CCGuard\monitor.json` 并打开面板，不需要命令行。再次双击不会开第二个窗口；已在运行时会提示从托盘打开。
+
+### 4. 命令行启动（等价）
 
 ```bat
-:: 仓库内（含最新改进）
+:: 仓库内
 python skills\claude-guardian\scripts\monitor.py quickstart
 ```
 
@@ -109,7 +117,7 @@ python ...\monitor.py quickstart --autostart
 
 快速配置默认不校验放行规则数量和 DNS 期望值；需要时在面板设置页或 JSON 里补。`runtime_config` 留空时三项配置检查显示 `unknown`。
 
-### 4. 手动配置（可选）
+### 5. 手动配置（可选）
 
 想自己填写时，先运行 `detect` 看候选核心和 TUN：
 
@@ -127,7 +135,7 @@ python ...\monitor.py detect
 
 不要把订阅、节点、密码或令牌写进去；配置里没有这些字段。
 
-### 5. 启动、自启与关闭
+### 6. 启动、自启与关闭
 
 ```bat
 :: 打开面板 + 托盘
@@ -266,6 +274,7 @@ python ...\monitor.py register-notifier --config <private>\monitor.json
 
 | 现象 | 先做什么 |
 | --- | --- |
+| 双击没反应 | 先装 Python 3.10+；改双击 `CCGuard.cmd` 看提示；确认 `.pyw` 已关联到 `pythonw` |
 | `quickstart` 没识别到客户端 | 先启动代理客户端，或用 `--client <预设>` 指定；也可先跑 `detect` 看候选 |
 | `proxy_core` 失效 | 运行 `detect` 看核心进程名；用 `process_names` 显式填写 |
 | `tun_adapter` 失效 | 确认客户端 TUN 已开启；用 `detect` 看网卡名；必要时加 `tun_match` |
@@ -281,6 +290,8 @@ python ...\monitor.py register-notifier --config <private>\monitor.json
 ## 项目结构
 
 ```text
+CCGuard.pyw                    双击启动（无控制台；仓库根和 Release 包内各一份）
+CCGuard.cmd                    双击回退（找 pythonw / pyw / python / py）
 skills/claude-guardian/
   SKILL.md                     Claude-Guardian Skill 入口
   scripts/monitor.py           CCGuard 监测入口
@@ -303,7 +314,7 @@ python tools/package_skill.py --output <new.zip>
 ```
 
 - CI 在 Linux、macOS、Windows 与 Python 3.10 Linux 上运行；`tools/ci_scope.py` 区分文档与代码推送。
-- 最新发布 `v0.2.0`；main 分支已包含一键启动、开机自启与界面改进。完整记录见 [CHANGELOG.md](CHANGELOG.md)，设计取舍见 [docs/decisions.md](docs/decisions.md)。
+- 最新发布 `v0.3.0`；包含双击启动、一键启动、开机自启与界面改进。完整记录见 [CHANGELOG.md](CHANGELOG.md)，设计取舍见 [docs/decisions.md](docs/decisions.md)。
 
 ## 完整 Claude-Guardian Skill
 

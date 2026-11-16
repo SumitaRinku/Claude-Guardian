@@ -1,5 +1,15 @@
 # 版本记录
 
+## 双击启动与单实例（2026-11-16，MONITOR-DOUBLECLICK-20261116，ADR-079）
+
+- 新增根目录 `CCGuard.pyw`（无控制台）与 `CCGuard.cmd`（回退 `pythonw`／`pyw`／`python`／`py`）；首次双击调用 `quickstart`，生成 `%LOCALAPPDATA%\CCGuard\monitor.json` 并打开面板，已有配置不覆盖
+- `monitor_gui.acquire_single_instance` 使用 Windows 命名互斥量 `Local\CCGuard.Monitor.Instance`：重复双击不会开第二个窗口或托盘，而是提示从托盘打开
+- 打包：`tools/package_skill.py` 把两个启动器放到 `claude-guardian/` 根；新增 `tests/test_launcher.py`，并同步 `test_installed_skill.py`、`test_package_members.py`、`test_source_bundle.py`、`test_macos_dns_case_reference.py`；`.gitattributes` 为 `*.cmd` 指定 CRLF
+- README、`monitor.md`、`scripts-index.md`、ADR-079 同步双击启动、单实例与回退说明
+- 验证：`tests.test_launcher` 4 项、`tests.test_monitor_gui` 35 项、完整套件 1701 项通过（442 项 POSIX 专属跳过）；以临时 `LOCALAPPDATA` 实际运行 `CCGuard.pyw` 8 秒，生成配置并打开 GUI，无异常；单实例互斥量单元测试通过。真实资源管理器双击与不同 Python 安装方式未逐项验收（not_run）
+- 发布：`v0.3.0`，资产 `claude-guardian-0.3.0.zip`，SHA-256 `36dc958514ee0012fdc3c369ef725e6dd7e6a0504e878803c6789d946935d193`
+- 风险与回滚：双击依赖 Python 3.10+ 与 `.pyw` 关联；`.cmd` 回退可能短暂闪控制台；单实例按当前 Windows 会话。仅影响启动器、面板、打包、测试与文档；回滚使用普通 revert，已生成的配置和启动器文件可单独删除
+
 ## 一键启动、开机自启与面板改进（2026-11-16，MONITOR-UX-20261116，ADR-078）
 
 - 新增 `quickstart`：自动识别主机名、客户端与 TUN，在 `%LOCALAPPDATA%\CCGuard\monitor.json` 生成配置并打开面板；已有配置不覆盖。支持 `--client`、`--runtime-config`、`--no-launch`、`--autostart`。快速配置默认 `min_allow_rules: 0`、`expect_dns_servers: []`、`runtime_config: ""`，避免未配置项造成误导性告警；需要时在设置页或 JSON 补

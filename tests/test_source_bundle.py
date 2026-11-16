@@ -33,6 +33,8 @@ class SourceBundleTests(unittest.TestCase):
             (root/'tools').mkdir()
             shutil.copy(ROOT/'tools/package_skill.py',root/'tools/package_skill.py')
             shutil.copy(ROOT/'LICENSE',root/'LICENSE')
+            for launcher in ('CCGuard.pyw','CCGuard.cmd'):
+                shutil.copy(ROOT/launcher,root/launcher)
             (root/'skills/claude-guardian/private-report.json').write_text('{"private":"sentinel"}')
             (root/'skills/claude-guardian/references/private-report.md').write_text('private sentinel')
             outputs=[Path(tmp)/'a.zip',Path(tmp)/'b.zip']
@@ -60,6 +62,8 @@ class SourceBundleTests(unittest.TestCase):
             (root/'tools').mkdir()
             shutil.copy(ROOT/'tools/package_skill.py',root/'tools/package_skill.py')
             shutil.copy(ROOT/'LICENSE',root/'LICENSE')
+            for launcher in ('CCGuard.pyw','CCGuard.cmd'):
+                shutil.copy(ROOT/launcher,root/launcher)
             (root/'skills/claude-guardian/sources/S01-server-glossary.md').write_text('changed')
             result=subprocess.run([sys.executable,str(root/'tools/package_skill.py'),'--output',str(Path(tmp)/'out.zip')],capture_output=True)
             self.assertNotEqual(result.returncode,0)

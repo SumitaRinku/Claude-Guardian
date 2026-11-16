@@ -31,6 +31,8 @@ class InstalledSkillTests(unittest.TestCase):
         (staging / 'tools').mkdir()
         shutil.copyfile(ROOT / 'tools/package_skill.py', staging / 'tools/package_skill.py')
         shutil.copyfile(ROOT / 'LICENSE', staging / 'LICENSE')
+        for launcher in ('CCGuard.pyw', 'CCGuard.cmd'):
+            shutil.copyfile(ROOT / launcher, staging / launcher)
         cls.sentinel = 'SYNTHETIC_PRIVATE_FILE_MUST_NOT_SHIP_7381'
         for relative in ('private-report.json', '.env', 'scripts/private-helper.txt',
                          'references/private-notes.md', 'sources/raw-private.txt'):
@@ -191,6 +193,8 @@ print('Detached imports and missing-parser boundary passed')
             names = archive.namelist()
             self.assertEqual(len(names), len(set(names)))
             self.assertIn('claude-guardian/LICENSE', names)
+            self.assertIn('claude-guardian/CCGuard.pyw', names)
+            self.assertIn('claude-guardian/CCGuard.cmd', names)
             for name in names:
                 self.assertNotIn('__pycache__', name)
                 self.assertNotIn(self.sentinel.encode(), archive.read(name))

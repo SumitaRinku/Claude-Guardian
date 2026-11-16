@@ -672,3 +672,11 @@ v1 只覆盖 Windows，其他平台记 `unknown` 而不冒充支持；`desktop` 
 开机自启是显式 opt-in：`autostart-enable` 只在当前用户 Startup 目录创建一个带 `CCGuard.Monitor` 身份的 `CCGuard.lnk`，目标为 `gui --config <配置> --tray --start-hidden`；`autostart-disable` 只删除这个快捷方式，`autostart-status` 查看状态。默认不写自启，不安装服务或计划任务，不需要管理员。`--start-hidden` 必须与 `--tray` 同时使用，避免窗口隐藏后无法找回。
 
 界面改为左侧栏 + 状态卡片 + ttk 控件；字体按用户字体优先、已安装回退选择，界面和日志使用 CJK 字体，日志不再用 Consolas 等无中文字形的等宽字体。窗口尺寸按屏幕收敛并居中。边界不变：只读、不出站、不碰凭据；开机自启依赖程序目录和配置路径不变，移动后需重新开启；quickstart 的默认值不是验收结论，`unknown` 和 `degraded` 仍需人工核对。验证见 CHANGELOG，回滚使用普通 revert。
+
+## ADR-079：双击启动与单实例（2026-11-16，MONITOR-DOUBLECLICK-20261116）
+
+需求是让 Windows 用户解压后双击即可使用，不需要命令行或手动写配置。新增根目录 `CCGuard.pyw`（无控制台）和 `CCGuard.cmd`（回退 `pythonw`／`pyw`／`python`／`py`），首次双击调用 `quickstart`，生成 `%LOCALAPPDATA%\CCGuard\monitor.json` 并打开面板；已有配置直接复用。打包脚本把两个启动器放到 `claude-guardian/` 根，解压即可双击；`.gitattributes` 为 `*.cmd` 指定 CRLF。
+
+`monitor_gui.run` 使用 Windows 命名互斥量（`Local\CCGuard.Monitor.Instance`）保证单实例：重复双击不会开第二个窗口或托盘，而是提示从托盘打开。启动器本身不新增网络、提权或常驻行为，仍受原有只读边界约束。
+
+已知限制：双击依赖 Python 3.10+ 与 `.pyw` 关联；`.cmd` 回退可能短暂显示控制台；单实例按当前 Windows 会话；真实资源管理器双击和不同 Python 安装方式未逐项真机验收。验证见 CHANGELOG，回滚使用普通 revert。

@@ -82,6 +82,8 @@ class MacOSDnsCaseReferenceTests(unittest.TestCase):
             (root / 'tools').mkdir()
             shutil.copyfile(ROOT / 'tools/package_skill.py', root / 'tools/package_skill.py')
             shutil.copyfile(ROOT / 'LICENSE', root / 'LICENSE')
+            for launcher in ('CCGuard.pyw', 'CCGuard.cmd'):
+                shutil.copyfile(ROOT / launcher, root / launcher)
             refs = root / 'skills/claude-guardian/references'
             (refs / 'provenance-private.json').write_text('synthetic private provenance sentinel')
             (refs / 'raw-network-experience.md').write_text('synthetic raw upload sentinel')

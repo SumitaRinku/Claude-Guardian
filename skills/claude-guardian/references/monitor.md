@@ -56,6 +56,10 @@
 
 不同格式能表达的项目不同：Clash/Mihomo 能读 `ipv6`、`tun.enable`、`tun.strict-route`、`dns-hijack`；sing-box 能读 `tun`／`inbounds[type=tun]` 的 `enable`、`strict_route`、`inet4/inet6_address` 或 1.11+ 的 `address` 列表，以及 `route.rules` 的 `hijack-dns`；Xray 能读 `dns.queryStrategy`、`routing.domainStrategy` 和 `sniffing.destOverride` 里的 `dns`。读不出的项显示 `unknown`，不按通过处理。
 
+## 双击启动
+
+Release 包解压后，双击根目录的 `CCGuard.pyw`（无控制台）或 `CCGuard.cmd`（找不到 `pythonw`/`pyw` 时回退到 `python`/`py`）。首次运行会自动调用 `quickstart`，生成配置并打开面板；已在运行时不会开第二个窗口，会提示从托盘打开。仓库根目录同样有这两个文件。
+
 ## 快速开始（推荐）
 
 一条命令生成配置并打开面板：
@@ -156,6 +160,6 @@ python scripts/monitor.py notifier-status         # 查看是否已注册
 
 ## 验证与已知限制
 
-- 单元测试覆盖配置校验、客户端预设、TUN 自动识别、Clash／sing-box／Xray 解析、状态机、通知冷却、输出脱敏与 HTTP 鉴权；页面逻辑用 Node 合成测试，不启动浏览器。新增覆盖 `quickstart`、`autostart-*`、`--start-hidden`、字体回退与 ttk 控件接线。
+- 单元测试覆盖配置校验、客户端预设、TUN 自动识别、Clash／sing-box／Xray 解析、状态机、通知冷却、输出脱敏与 HTTP 鉴权；页面逻辑用 Node 合成测试，不启动浏览器。新增覆盖 `quickstart`、`autostart-*`、`--start-hidden`、字体回退、ttk 控件接线、双击启动路径解析与 Windows 单实例互斥量。
 - 真机验收：FlClash 上启动面板核对 10 项与实际一致；关闭代理核心后 5–10 秒内出现告警；恢复后收到恢复提示。本次以合成配置启动面板 6 秒无异常；开机自启的快捷方式参数用记录型 runner 验证，真实登录与不同 Windows 版本未逐项验收（not_run）。
 - 已知限制：托盘依赖 PowerShell 与 WinForms；通知可能被系统专注助手抑制；`unknown` 不等于正常；客户端升级可能改变进程名、TUN 名称或配置键名，自动识别不到时用 `process_names`、`tun_match`、`config_format` 显式指定；开机自启依赖程序目录和配置路径不变，移动后需要重新开启。

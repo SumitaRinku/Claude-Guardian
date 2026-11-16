@@ -56,6 +56,11 @@ def main():
     files = [(p, Path('claude-guardian') / p.relative_to(skill)) for p in candidates
              if p.is_file() and not p.is_symlink()]
     files.append((ROOT / 'LICENSE', Path('claude-guardian/LICENSE')))
+    for launcher in ('CCGuard.pyw', 'CCGuard.cmd'):
+        source = ROOT / launcher
+        if source.is_symlink() or not source.is_file():
+            parser.error('Missing launcher: ' + launcher)
+        files.append((source, Path('claude-guardian') / launcher))
     if args.output.exists():
         parser.error('Output exists; choose a new filename to preserve previous releases')
     with zipfile.ZipFile(args.output, 'x', compression=zipfile.ZIP_DEFLATED) as archive:

@@ -246,9 +246,21 @@ class UiWiring(unittest.TestCase):
         source = (SCRIPTS / 'monitor_gui.py').read_text(encoding='utf-8')
         for text in ('ttk.Spinbox', 'ttk.Checkbutton', 'ttk.Scrollbar',
                      'engine.enable_autostart(config_path)', 'engine.disable_autostart()',
-                     'start_hidden', "text='开机自启'", 'if start_hidden and tray_alive():'):
+                     'start_hidden', "text='开机自启'", 'if start_hidden and tray_alive():',
+                     'acquire_single_instance', r'Local\\CCGuard.Monitor.Instance'):
             self.assertIn(text, source)
         self.assertIn("families['log']", source)
+
+    @unittest.skipUnless(engine.platform.system() == 'Windows', 'Windows named mutex')
+    def test_a_second_instance_is_refused(self):
+        import ctypes
+        gui._INSTANCE_MUTEX = None
+        self.assertTrue(gui.acquire_single_instance())
+        self.assertFalse(gui.acquire_single_instance())
+        handle = gui._INSTANCE_MUTEX
+        gui._INSTANCE_MUTEX = None
+        if handle:
+            ctypes.windll.kernel32.CloseHandle(ctypes.c_void_p(handle))
 
 
 class Assets(unittest.TestCase):

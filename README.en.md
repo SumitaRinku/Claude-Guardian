@@ -38,6 +38,7 @@ It splits the state into 10 checks and shows them in green / orange / red / grey
 | Capability | What it does |
 | --- | --- |
 | **10 live checks** | Proxy core, TUN, default route, firewall, allow rules, core IPv6 / strict route / DNS hijack, physical-adapter DNS / IPv6 |
+| **Double-click start** | Extract the release package and double-click `CCGuard.pyw` (or `CCGuard.cmd`); the first run writes a config and opens the panel, and a second double-click does not open another window |
 | **One-command start** | `quickstart` detects the host, client and TUN, writes a config and opens the panel; an existing config is never overwritten |
 | **State-coloured shield** | Green ✓ ok, orange ! degraded, red ✕ fail, grey — unknown; window, tray and page title stay in sync |
 | **New UI** | Dark sidebar + status cards + ttk settings controls; Chinese text falls back to `Microsoft YaHei UI`, and the log no longer uses a CJK-less monospace font |
@@ -70,24 +71,31 @@ The monitor uses only the Python standard library; no third-party dependency is 
 
 ### 2. Get it
 
-**Option A: clone the repository (recommended; latest UI and autostart)**
+**Option A: release package (recommended; double-click and go)**
+
+Download [`claude-guardian-0.3.0.zip`](https://github.com/SumitaRinku/CCguard/releases/download/v0.3.0/claude-guardian-0.3.0.zip), extract it, and double-click `CCGuard.pyw` or `CCGuard.cmd` inside `claude-guardian\`.
+
+**Option B: clone the repository (latest source)**
 
 ```powershell
 git clone https://github.com/SumitaRinku/CCguard.git
 ```
 
-In the repository the entry is `skills\claude-guardian\scripts\monitor.py`. Quickstart, autostart and the new UI are on `main`.
+The repository root also has `CCGuard.pyw` / `CCGuard.cmd`; the monitor entry is `skills\claude-guardian\scripts\monitor.py`.
 
-**Option B: release package (v0.2.0)**
+### 3. Double-click start (recommended)
 
-Download [`claude-guardian-0.2.0.zip`](https://github.com/SumitaRinku/CCguard/releases/download/v0.2.0/claude-guardian-0.2.0.zip), extract it, and use the `claude-guardian\` directory. The package is the full Claude-Guardian Skill; the entry is `claude-guardian\scripts\monitor.py`.
+After extracting the release package, enter `claude-guardian\` and double-click:
 
-> v0.2.0 contains multi-client monitoring. Quickstart, autostart and the new UI are on `main` and will enter the next package.
+- `CCGuard.pyw`: no console, recommended; requires `.pyw` to be associated with Python.
+- `CCGuard.cmd`: falls back to `python` / `py` when `pythonw` / `pyw` is missing; a console may flash briefly.
 
-### 3. One-command start (recommended)
+The first run writes `%LOCALAPPDATA%\CCGuard\monitor.json` and opens the panel, with no command line needed. Double-clicking again does not open a second window; if it is already running, it tells you to use the tray.
+
+### 4. Command-line start (equivalent)
 
 ```bat
-:: repository (latest improvements)
+:: repository
 python skills\claude-guardian\scripts\monitor.py quickstart
 ```
 
@@ -111,7 +119,7 @@ python ...\monitor.py quickstart --autostart
 
 The quick config does not check the allow-rule count or expected DNS servers by default; add them in Settings or the JSON. An empty `runtime_config` leaves the three config checks `unknown`.
 
-### 4. Manual configuration (optional)
+### 5. Manual configuration (optional)
 
 To fill it in yourself, run `detect` first to see candidate cores and TUN adapters:
 
@@ -129,7 +137,7 @@ Then copy `assets\monitor\config.example.json` to a private directory outside th
 
 Never put subscriptions, nodes, passwords or tokens in the file; the schema has no such fields.
 
-### 5. Start, autostart and close
+### 6. Start, autostart and close
 
 ```bat
 :: open the panel + tray
@@ -268,6 +276,7 @@ Runtime config paths differ by client and version; always point to the file the 
 
 | Symptom | First step |
 | --- | --- |
+| Double-click does nothing | Install Python 3.10+ first; double-click `CCGuard.cmd` to see the fallback message; make sure `.pyw` is associated with `pythonw` |
 | `quickstart` finds no client | Start the proxy client first, or pass `--client <preset>`; run `detect` to see candidates |
 | `proxy_core` fails | Run `detect`; set the core process name explicitly with `process_names` |
 | `tun_adapter` fails | Confirm the client TUN is on; run `detect`; add a `tun_match` fragment if needed |
@@ -283,6 +292,8 @@ Runtime config paths differ by client and version; always point to the file the 
 ## Project layout
 
 ```text
+CCGuard.pyw                    double-click launcher (no console; repo root and release package)
+CCGuard.cmd                    double-click fallback (pythonw / pyw / python / py)
 skills/claude-guardian/
   SKILL.md                     Claude-Guardian Skill entry
   scripts/monitor.py           CCGuard monitor entry
@@ -305,7 +316,7 @@ python tools/package_skill.py --output <new.zip>
 ```
 
 - CI runs on Linux, macOS, Windows and Python 3.10 Linux; `tools/ci_scope.py` distinguishes docs-only from code pushes.
-- Latest release `v0.2.0`; `main` already contains quickstart, autostart and the UI improvements. See [CHANGELOG.md](CHANGELOG.md) for the full record and [docs/decisions.md](docs/decisions.md) for design trade-offs.
+- Latest release `v0.3.0`; it includes double-click start, quickstart, autostart and the UI improvements. See [CHANGELOG.md](CHANGELOG.md) for the full record and [docs/decisions.md](docs/decisions.md) for design trade-offs.
 
 ## The full Claude-Guardian Skill
 

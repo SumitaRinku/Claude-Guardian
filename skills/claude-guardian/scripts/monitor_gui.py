@@ -226,6 +226,30 @@ def rounded_points(x1, y1, x2, y2, radius):
             x1, y2, x1, y2 - radius, x1, y1 + radius, x1, y1]
 
 
+_INSTANCE_MUTEX = None
+
+
+def acquire_single_instance():
+    """Windows named mutex: a second double-click must not create another window/tray."""
+    global _INSTANCE_MUTEX
+    if platform.system() != 'Windows':
+        return True
+    try:
+        kernel32 = ctypes.windll.kernel32
+        kernel32.CreateMutexW.restype = ctypes.c_void_p
+        kernel32.SetLastError(0)
+        handle = kernel32.CreateMutexW(None, False, 'Local\\CCGuard.Monitor.Instance')
+        if not handle:
+            return True
+        if kernel32.GetLastError() == 183:
+            kernel32.CloseHandle(ctypes.c_void_p(handle))
+            return False
+        _INSTANCE_MUTEX = handle
+        return True
+    except Exception:
+        return True
+
+
 def run(cfg, config_path, tray=False, start_hidden=False):
     try:
         import tkinter as tk
@@ -233,6 +257,14 @@ def run(cfg, config_path, tray=False, start_hidden=False):
         from tkinter import ttk
     except ImportError:
         raise engine.MonitorError('本机缺少 tkinter，无法打开独立面板；可改用 serve 网页版。') from None
+
+    if not acquire_single_instance():
+        try:
+            from tkinter import messagebox
+            messagebox.showinfo(engine.APP_NAME, 'CCGuard 已在运行。请双击托盘图标或从托盘菜单打开面板。')
+        except Exception:
+            pass
+        return
 
     enable_dpi()
     set_app_id()

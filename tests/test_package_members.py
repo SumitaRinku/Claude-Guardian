@@ -49,6 +49,8 @@ class PackageMembersTests(unittest.TestCase):
         (cls.repo / 'tools').mkdir()
         shutil.copyfile(ROOT / 'tools/package_skill.py', cls.repo / 'tools/package_skill.py')
         shutil.copyfile(ROOT / 'LICENSE', cls.repo / 'LICENSE')
+        for launcher in ('CCGuard.pyw', 'CCGuard.cmd'):
+            shutil.copyfile(ROOT / launcher, cls.repo / launcher)
         cls.decoys = ('scripts/metadata-audit.json', 'reports/metadata.json', 'audits/metadata.json',
                       'references/private-metadata-audit.md', 'docs/private-notes.md')
         for relative in cls.decoys:
@@ -75,6 +77,7 @@ class PackageMembersTests(unittest.TestCase):
     def test_explicit_member_list_and_no_audits(self):
         expected = {'claude-guardian/' + path for path in self.paths}
         expected.add('claude-guardian/LICENSE')
+        expected.update({'claude-guardian/CCGuard.pyw', 'claude-guardian/CCGuard.cmd'})
         for path in (ENTRY, 'scripts/agent_rules_task.py', 'references/agent-rules-task.md'):
             self.assertEqual(self.paths.count(path), 1, path)
         self.assertEqual(len(expected), len(self.members))
