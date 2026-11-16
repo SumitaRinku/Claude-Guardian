@@ -38,9 +38,12 @@ It splits the state into 10 checks and shows them in green / orange / red / grey
 | Capability | What it does |
 | --- | --- |
 | **10 live checks** | Proxy core, TUN, default route, firewall, allow rules, core IPv6 / strict route / DNS hijack, physical-adapter DNS / IPv6 |
+| **One-command start** | `quickstart` detects the host, client and TUN, writes a config and opens the panel; an existing config is never overwritten |
 | **State-coloured shield** | Green ✓ ok, orange ! degraded, red ✕ fail, grey — unknown; window, tray and page title stay in sync |
-| **Window + tray + web** | Native tkinter window (default), tray notifications, local `127.0.0.1` web page as a fallback |
+| **New UI** | Dark sidebar + status cards + ttk settings controls; Chinese text falls back to `Microsoft YaHei UI`, and the log no longer uses a CJK-less monospace font |
+| **Window + tray + web** | tkinter panel (default), tray notifications, local `127.0.0.1` web page as a fallback |
 | **System notifications** | Alerts on state transitions with cooldown and recovery notices; can be paused |
+| **Optional autostart** | A per-user Startup shortcut opens the panel hidden in the tray at login; off by default |
 | **Client presets** | FlClash, Clash Verge Rev, Clash Nyanpasu, Clash for Windows, Mihomo / Clash.Meta, sing-box, Hiddify, v2rayN, NekoRay / NekoBox |
 | **TUN auto-detection** | Matches adapter name / description fragments, so client upgrades usually need no config change |
 | **Multiple config formats** | Clash/Mihomo YAML, sing-box JSON (including 1.11+ `address`), Xray JSON; unreadable fields stay `unknown` |
@@ -51,7 +54,7 @@ It splits the state into 10 checks and shows them in green / orange / red / grey
 - **Read-only**: no `Set-*`, no firewall/route/proxy changes, no core restart.
 - **No outbound traffic**: no IP, DNS-leak, latency or WebRTC probes; the web mode only listens on `127.0.0.1`.
 - **No admin rights**: the monitor runs as a normal user; elevation belongs to other protection scripts.
-- **No resident service**: no Windows service, scheduled task or start-up entry.
+- **No autostart by default**: no Windows service or scheduled task, and no Startup entry unless you explicitly enable autostart. Enabling creates one CCGuard shortcut in the current user's Startup folder and can be undone at any time.
 - **No credentials**: notifications and state contain only state names and check IDs, never IPs, paths, nodes, subscription links or config values.
 - **`unknown` is not a pass**: failed queries, missing permissions, unsupported formats or an empty config stay unknown.
 
@@ -67,37 +70,56 @@ The monitor uses only the Python standard library; no third-party dependency is 
 
 ### 2. Get it
 
-**Option A: release package (recommended)**
-
-Download [`claude-guardian-0.2.0.zip`](https://github.com/SumitaRinku/CCguard/releases/download/v0.2.0/claude-guardian-0.2.0.zip), extract it, and use the `claude-guardian\` directory. The package is the full Claude-Guardian Skill; the CCGuard entry is `claude-guardian\scripts\monitor.py`.
-
-**Option B: clone the repository**
+**Option A: clone the repository (recommended; latest UI and autostart)**
 
 ```powershell
 git clone https://github.com/SumitaRinku/CCguard.git
 ```
 
-In the repository the entry is `skills\claude-guardian\scripts\monitor.py`.
+In the repository the entry is `skills\claude-guardian\scripts\monitor.py`. Quickstart, autostart and the new UI are on `main`.
 
-### 3. Detect the host
+**Option B: release package (v0.2.0)**
+
+Download [`claude-guardian-0.2.0.zip`](https://github.com/SumitaRinku/CCguard/releases/download/v0.2.0/claude-guardian-0.2.0.zip), extract it, and use the `claude-guardian\` directory. The package is the full Claude-Guardian Skill; the entry is `claude-guardian\scripts\monitor.py`.
+
+> v0.2.0 contains multi-client monitoring. Quickstart, autostart and the new UI are on `main` and will enter the next package.
+
+### 3. One-command start (recommended)
 
 ```bat
-:: extracted release package
-python claude-guardian\scripts\monitor.py detect
-
-:: repository
-python skills\claude-guardian\scripts\monitor.py detect
+:: repository (latest improvements)
+python skills\claude-guardian\scripts\monitor.py quickstart
 ```
 
-The output lists running known proxy cores, candidate TUN adapters and possible `client` presets:
+`quickstart` reads the host name, detects running known clients and TUN adapters, writes `%LOCALAPPDATA%\CCGuard\monitor.json` (an existing config is never overwritten), and opens the panel + tray. The tray keeps alerting after the window closes.
 
-```json
-{"platform":"Windows","cores":["FlClash","FlClashCore"],"tun_adapters":[{"name":"FlClash","description":"Meta Tunnel","status":"Up"}],"client_guesses":["flclash"]}
+Common options:
+
+```bat
+:: pick a client preset
+python ...\monitor.py quickstart --client flclash
+
+:: point at the config the client actually loads (absolute path)
+python ...\monitor.py quickstart --runtime-config "C:\Users\YOU\AppData\Roaming\com.follow\clash\config.yaml"
+
+:: write the config without opening the panel
+python ...\monitor.py quickstart --no-launch
+
+:: also enable autostart (starts hidden in the tray at login)
+python ...\monitor.py quickstart --autostart
 ```
 
-### 4. Write the config
+The quick config does not check the allow-rule count or expected DNS servers by default; add them in Settings or the JSON. An empty `runtime_config` leaves the three config checks `unknown`.
 
-Copy `assets\monitor\config.example.json` to a private directory outside the repository (for example `%USERPROFILE%\.ccguard\monitor.json`) and confirm at least:
+### 4. Manual configuration (optional)
+
+To fill it in yourself, run `detect` first to see candidate cores and TUN adapters:
+
+```bat
+python ...\monitor.py detect
+```
+
+Then copy `assets\monitor\config.example.json` to a private directory outside the repository (for example `%USERPROFILE%\.ccguard\monitor.json`) and confirm at least:
 
 - `target`: the exact output of `python -c "import platform; print(platform.node())"`
 - `proxy.client`: a preset from the table below
@@ -107,15 +129,21 @@ Copy `assets\monitor\config.example.json` to a private directory outside the rep
 
 Never put subscriptions, nodes, passwords or tokens in the file; the schema has no such fields.
 
-### 5. Start it
+### 5. Start, autostart and close
 
 ```bat
-python claude-guardian\scripts\monitor.py gui --config "%USERPROFILE%\.ccguard\monitor.json" --tray
+:: open the panel + tray
+python ...\monitor.py gui --config "%LOCALAPPDATA%\CCGuard\monitor.json" --tray
+
+:: enable / disable / check autostart
+python ...\monitor.py autostart-enable --config "%LOCALAPPDATA%\CCGuard\monitor.json"
+python ...\monitor.py autostart-disable
+python ...\monitor.py autostart-status
 ```
 
-In the repository, replace `claude-guardian\scripts\monitor.py` with `skills\claude-guardian\scripts\monitor.py`.
+The left sidebar also has an "autostart" checkbox with the same effect. It is off by default; when enabled, login opens the panel hidden in the tray, without a window popping up.
 
-Common variants:
+Other entries:
 
 ```bat
 :: one collection, JSON output
@@ -227,7 +255,9 @@ Runtime config paths differ by client and version; always point to the file the 
 
 ## UI and notifications
 
-- **Native window**: Status / Log / Settings tabs; Settings adjusts the interval, cooldown, notification states and pause.
+- **Native window**: dark sidebar navigation (Status / Log / Settings) + status cards + ttk settings controls; Settings adjusts the interval, cooldown, notification states and pause, and can open the JSON config directly.
+- **Autostart**: a sidebar checkbox opens the panel hidden in the tray at login; off by default and removable at any time.
+- **Fonts**: user-supplied Anthropic fonts under `fonts/` win; otherwise the UI and log fall back to `Microsoft YaHei UI`, headings to `Segoe UI Semibold`, and code to `Cascadia Mono` / `Consolas`. The log no longer uses a CJK-less monospace font.
 - **Closing the window**: with a tray, hide to tray, close, or cancel; without a tray, only close or cancel.
 - **Tray**: the shield changes colour with the overall state and shows the state on hover; transitions raise notifications with cooldown, and recovery is announced.
 - **Web fallback**: `serve` listens on a random `127.0.0.1` port with a random session token, validates `Host`, `Origin` and `Sec-Fetch-Site`, and sends a strict CSP.
@@ -238,11 +268,14 @@ Runtime config paths differ by client and version; always point to the file the 
 
 | Symptom | First step |
 | --- | --- |
+| `quickstart` finds no client | Start the proxy client first, or pass `--client <preset>`; run `detect` to see candidates |
 | `proxy_core` fails | Run `detect`; set the core process name explicitly with `process_names` |
 | `tun_adapter` fails | Confirm the client TUN is on; run `detect`; add a `tun_match` fragment if needed |
 | `default_route` fails | Confirm the default route goes through TUN; check for a higher-priority route or VPN |
 | `core_ipv6` / `strict_route` / `dns_hijack` unknown | Check that `runtime_config` points to the live config; set `config_format` if needed |
 | `dns_servers` / `os_ipv6` degraded | A subscription update or client upgrade may have restored DNS override or IPv6; recheck |
+| Autostart does not work | Confirm the program directory and config path have not moved; toggle it again or run `autostart-enable`; check `CCGuard.lnk` in the current user's Startup folder |
+| Fonts still look poor | Put Anthropic fonts in `fonts/` (loaded per process, not installed) or make sure `Microsoft YaHei UI` is present |
 | No notifications | Check Windows notification settings and Focus Assist; the panel is the source of truth |
 | "monitor stopped updating" | The monitor process exited or the interval is too long; restart the panel |
 | The window will not open | tkinter is missing; use the `serve` web page |
@@ -272,7 +305,7 @@ python tools/package_skill.py --output <new.zip>
 ```
 
 - CI runs on Linux, macOS, Windows and Python 3.10 Linux; `tools/ci_scope.py` distinguishes docs-only from code pushes.
-- Current version `v0.2.0`; see [CHANGELOG.md](CHANGELOG.md) for the full record and [docs/decisions.md](docs/decisions.md) for design trade-offs.
+- Latest release `v0.2.0`; `main` already contains quickstart, autostart and the UI improvements. See [CHANGELOG.md](CHANGELOG.md) for the full record and [docs/decisions.md](docs/decisions.md) for design trade-offs.
 
 ## The full Claude-Guardian Skill
 
@@ -312,6 +345,7 @@ You should end up with `~/.codex/skills/claude-guardian/SKILL.md`. The command s
 - **No credentials needed**: you never hand over IPs, subscription links, passwords, UUIDs or full configs.
 - **No Claude during preparation**: the client is not started, logged into or contacted.
 - **Adapt to your environment**: systems, clients and versions differ; check first, adapt, and roll back if something goes wrong.
+- **Autostart is an explicit switch**: it is off by default; only ticking it or running `autostart-enable` writes one per-user Startup shortcut, and it can be removed at any time.
 - **Nobody can guarantee you will not be banned**: CCGuard monitors local state only; it is not a ban-avoidance guarantee and does not replace platform compliance or acceptance.
 
 See [authorization tiers](skills/claude-guardian/references/authorization-tiers.md) and [contact and authorization boundaries](skills/claude-guardian/references/contact-and-safety.md) for the full rules.

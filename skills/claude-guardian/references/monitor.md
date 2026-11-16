@@ -17,9 +17,9 @@
 | 系统 | Windows 10/11，PowerShell 5.1 |
 | 代理客户端 | FlClash、Clash Verge Rev、Clash Nyanpasu、Clash for Windows、Mihomo / Clash.Meta、sing-box、Hiddify、v2rayN、NekoRay / NekoBox；也可自定义进程名与 TUN 名称片段 |
 | Python | 3.10+，只用标准库 |
-| 依赖服务 | 无；不安装服务、不建计划任务、不写开机自启 |
-| 界面 | 独立 tkinter 窗口（默认）或本地网页（备选）；两者都不需要浏览器即可收到通知 |
-| 字体 | 读取仓库 `fonts/` 及其子文件夹里用户自备的 .ttf/.otf（进程内私有注册，不安装到系统），按字体文件内的真实字体名选用：正文优先 Anthropic Sans Text（静态字重），其次 Anthropic Sans Web Text；标题 Anthropic Serif；代码 Anthropic Mono。中文由系统字体自动补字；文件缺失时回退微软雅黑／Georgia／Consolas。`fonts/` 已列入 `.gitignore`，字体不随仓库或安装包分发 |
+| 依赖服务 | 无；不安装服务、不建计划任务；默认不写开机自启，可选开启一个当前用户 Startup 快捷方式 |
+| 界面 | 独立 tkinter 窗口（默认，侧栏 + 卡片 + ttk 控件）或本地网页（备选）；两者都不需要浏览器即可收到通知 |
+| 字体 | 读取仓库 `fonts/` 及其子文件夹里用户自备的 .ttf/.otf（进程内私有注册，不安装到系统），按字体文件内的真实字体名选用：正文优先 Anthropic Sans Text（静态字重），其次 Anthropic Sans Web Text；标题 Anthropic Serif；代码 Anthropic Mono。文件缺失时按已安装字体回退：界面与日志用 `Microsoft YaHei UI`／`Segoe UI`，标题用 `Segoe UI Semibold`，代码用 `Cascadia Mono`／`Consolas`；日志不再用无中文字形的等宽字体。`fonts/` 已列入 `.gitignore`，字体不随仓库或安装包分发 |
 | 采集方式 | 单次 PowerShell 查询，返回进程、网卡、路由、防火墙、DNS 与 IPv6 绑定 |
 | 采集间隔 | 默认 5 秒，配置项 `alerts.interval_seconds` |
 
@@ -56,9 +56,22 @@
 
 不同格式能表达的项目不同：Clash/Mihomo 能读 `ipv6`、`tun.enable`、`tun.strict-route`、`dns-hijack`；sing-box 能读 `tun`／`inbounds[type=tun]` 的 `enable`、`strict_route`、`inet4/inet6_address` 或 1.11+ 的 `address` 列表，以及 `route.rules` 的 `hijack-dns`；Xray 能读 `dns.queryStrategy`、`routing.domainStrategy` 和 `sniffing.destOverride` 里的 `dns`。读不出的项显示 `unknown`，不按通过处理。
 
+## 快速开始（推荐）
+
+一条命令生成配置并打开面板：
+
+```sh
+python scripts/monitor.py quickstart
+```
+
+- 自动读取本机主机名，识别正在运行的已知代理核心与 TUN，写入 `%LOCALAPPDATA%\CCGuard\monitor.json`，然后打开窗口 + 托盘。已有配置不会覆盖。
+- `--no-launch` 只生成配置；`--client <预设>` 指定客户端；`--runtime-config <绝对路径>` 指定运行配置；`--autostart` 同时开启开机自启。
+- 快速配置默认不校验放行规则数量（`min_allow_rules: 0`），也不校验 DNS 期望值（`expect_dns_servers: []`）；需要时在设置页或 JSON 里补。
+- 配置里没有订阅、节点、密码或令牌；`runtime_config` 留空时三项配置检查显示 `unknown`。
+
 ## 首次配置
 
-1. 确认已完成防护部署：默认出站 Block、`guardian-*` 规则存在、TUN 正常。
+1. 确认已完成防护部署：默认出站 Block、`guardian-*` 规则存在、TUN 正常。想省去手工填写，用上面的 `quickstart`。
 2. 把 `assets/monitor/config.example.json` 复制到本机私有目录。
 3. `target` 填 `python -c "import platform; print(platform.node())"` 的精确输出。
 4. `proxy.client` 填上表里的预设；TUN 名称不确定就保持 `auto`。
@@ -69,24 +82,29 @@
 ## 启动与入口
 
 ```sh
+python scripts/monitor.py quickstart                                    # 一条命令生成配置并打开面板（推荐）
 python scripts/monitor.py detect                                        # 只读列出候选核心与 TUN 网卡（不需要配置）
 python scripts/monitor.py check  --config <private>/monitor.json          # 单次采集，输出 JSON
 python scripts/monitor.py gui    --config <private>/monitor.json --tray   # 独立窗口 + 托盘（默认入口）
 python scripts/monitor.py serve  --config <private>/monitor.json          # 本地网页（备选）
 python scripts/monitor.py desktop --config <private>/monitor.json --output <新目录>
+python scripts/monitor.py autostart-enable --config <private>/monitor.json    # 可选：登录后自动打开面板到托盘
+python scripts/monitor.py autostart-disable      # 关闭开机自启
+python scripts/monitor.py autostart-status       # 查看开机自启状态
 python scripts/monitor.py register-notifier --config <private>/monitor.json   # 可选：通知以 CCGuard 署名（在开始菜单建一个入口）
 python scripts/monitor.py unregister-notifier     # 撤销上一项
 python scripts/monitor.py notifier-status         # 查看是否已注册
 ```
 
 - **候选识别**（`detect`）：不需要配置，只读列出正在运行的已知代理核心、候选 TUN 网卡（名称／描述／状态）和可能的 `client` 预设，用来填写首次配置；只在 Windows 上可用，不联网。
+- **开机自启**（`autostart-*`）：默认关闭。`autostart-enable` 只在当前用户 Startup 目录创建一个带 CCGuard 身份的 `CCGuard.lnk`，目标为 `gui --config <配置> --tray --start-hidden`，登录后自动打开面板并隐藏到托盘；不需要管理员。`autostart-disable` 只删除这个快捷方式，`autostart-status` 查看状态。移动程序目录或配置文件后需要重新开启。面板左侧栏的「开机自启」复选框调用同一组动作。
 - **通知名称**：Windows 按发送程序给通知署名，托盘运行在 PowerShell 里，所以默认显示「Windows PowerShell」。未打包的程序要用自己的名字，必须有一个带程序身份（`System.AppUserModel.ID` = `CCGuard.Monitor`）的开始菜单快捷方式；只写注册表的身份会被 Windows 静默丢弃（Windows 11 26300 实测）。`register-notifier` 只在当前用户的开始菜单目录（`%APPDATA%\Microsoft\Windows\Start Menu\Programs\CCGuard.lnk`）创建这一个快捷方式，不需要管理员；它同时是启动面板的入口。同名快捷方式不属于 CCGuard 时拒绝覆盖。`unregister-notifier` 只删除带本程序身份的这一个快捷方式。托盘只在快捷方式存在、且系统里 CCGuard 的通知未被关闭时发 Toast（首次发送前系统报告的开关值为空，按未关闭处理）；被关闭或系统通知接口不可用时回退为气泡，告警不丢。重启托盘后生效；移动程序目录或配置后需重新注册。需要用户确认后再执行注册。
 
-- **独立窗口**（`gui`）：tkinter 原生面板，分「状态 / 日志 / 设置」三页；托盘负责系统气泡通知，不需要浏览器。窗口图标与托盘图标是按整体状态换色的盾牌，内含白色符号，色弱时也能区分：绿 ✓ 正常、橙 ! 降级、红 ✕ 失效、灰 — 未知。
+- **独立窗口**（`gui`）：tkinter 面板，左侧栏导航（状态 / 日志 / 设置）+ 状态卡片 + ttk 设置控件；设置页可调采集间隔、通知冷却、通知项和暂停提醒，并可「打开配置」直接编辑 JSON；左侧栏「开机自启」可切换登录自启。`--start-hidden` 与 `--tray` 一起用时，启动后直接隐藏到托盘（autostart 入口使用）。窗口图标与托盘图标是按整体状态换色的盾牌，内含白色符号，色弱时也能区分：绿 ✓ 正常、橙 ! 降级、红 ✕ 失效、灰 — 未知。
 - **关闭窗口**会先询问：隐藏到托盘（监测与托盘提醒继续）或直接关闭（停止监测）；取消则保持打开。未启动托盘时只提供关闭或取消。隐藏后双击托盘，或用托盘菜单「打开面板」，即可恢复窗口。
 - **网页备选**（`serve`）：只监听 `127.0.0.1` 的随机端口，路径带随机会话令牌，并校验 `Host`、`Origin`、`Sec-Fetch-Site`，带严格 CSP。
 - `--idle-minutes` 只作用于 `serve`（默认 15 分钟无访问自动退出；`0` 表示不自动退出）。
-- `desktop` 生成 `.lnk`／`.app`／`.desktop`，不写自启项；入口固定带 `--tray`，关掉页面后托盘继续提醒。移动程序目录或配置后需要重新生成。
+- `desktop` 生成 `.lnk`／`.app`／`.desktop`，不写自启项；入口固定带 `--tray`，关掉页面后托盘继续提醒。移动程序目录或配置后需要重新生成。需要登录自启时用 `autostart-enable`，它单独创建当前用户 Startup 快捷方式。
 
 ## 检查项与判定
 
@@ -111,7 +129,7 @@ python scripts/monitor.py notifier-status         # 查看是否已注册
 
 ## 通知
 
-- **独立窗口**：状态页卡片按圆点颜色区分（绿/橙/红/灰），日志页记录每次状态跃迁和设置变更；设置页可调采集间隔、通知冷却、通知项和暂停提醒。「保存到配置」先完整校验再原子替换文件，校验不过时原配置不动；`alerts.paused` 是可选布尔值。
+- **独立窗口**：左侧栏导航 + 状态页卡片（绿/橙/红/灰）+ 日志页；设置页用 ttk 控件调采集间隔、通知冷却、通知项和暂停提醒，并可「打开配置」直接编辑 JSON。「保存到配置」先完整校验再原子替换文件，校验不过时原配置不动；`alerts.paused` 是可选布尔值。左侧栏「开机自启」是显式开关，默认关闭。
 - **关闭窗口**：用 `--tray` 启动且托盘仍在时，可选隐藏到托盘、直接关闭或取消；没有托盘时只提供关闭或取消，避免窗口隐藏后无法找回。
 - **托盘**：`--tray` 启动后常驻，读取监测进程写出的 `state.json`；图标与悬停文字按整体状态换色换字，气泡通知按 `alerts.notify_states` 与冷却时间触发，恢复时也提示。监测超过 3 个采集周期没有更新时显示「监测已停止更新」。
 - **暂停**：面板设置里的「暂停提醒」写入状态的 `paused` 字段，托盘同时生效；托盘菜单里的「暂停提醒」只影响本次托盘进程。面板修改的采集间隔与冷却也经 `state.json` 同步给托盘，「已停止更新」按当前间隔判断。
@@ -129,8 +147,8 @@ python scripts/monitor.py notifier-status         # 查看是否已注册
 
 ## 不做的事
 
-- 不创建开机自启、Windows 服务或计划任务。
-- 除用户主动执行的 `register-notifier`（当前用户开始菜单里的一个 CCGuard 快捷方式，可用 `unregister-notifier` 撤销）外，不写开始菜单或注册表。
+- 默认不创建开机自启、Windows 服务或计划任务。只有用户显式执行 `autostart-enable`（或在面板左侧栏勾选「开机自启」）时，才在当前用户 Startup 目录创建一个 CCGuard 快捷方式，可用 `autostart-disable` 撤销。
+- 除用户主动执行的 `register-notifier`（当前用户开始菜单里的一个 CCGuard 快捷方式，可用 `unregister-notifier` 撤销）和 `autostart-enable` 外，不写开始菜单、Startup 或注册表。
 - 不做联网探测、出口 IP 检查、延迟测速或 DNS 泄露测试。
 - 不自动重启核心、不改防火墙、不关闭或启用规则。
 - 不读取或回显 `proxies`、`proxy-groups`、订阅链接与凭据。
@@ -138,6 +156,6 @@ python scripts/monitor.py notifier-status         # 查看是否已注册
 
 ## 验证与已知限制
 
-- 单元测试覆盖配置校验、客户端预设、TUN 自动识别、Clash／sing-box／Xray 解析、状态机、通知冷却、输出脱敏与 HTTP 鉴权；页面逻辑用 Node 合成测试，不启动浏览器。
-- 真机验收：FlClash 上启动面板核对 10 项与实际一致；关闭代理核心后 5–10 秒内出现告警；恢复后收到恢复提示。其他客户端与版本按上表的字段解析，未逐项真机验收。
-- 已知限制：托盘依赖 PowerShell 与 WinForms；通知可能被系统专注助手抑制；`unknown` 不等于正常；客户端升级可能改变进程名、TUN 名称或配置键名，自动识别不到时用 `process_names`、`tun_match`、`config_format` 显式指定。
+- 单元测试覆盖配置校验、客户端预设、TUN 自动识别、Clash／sing-box／Xray 解析、状态机、通知冷却、输出脱敏与 HTTP 鉴权；页面逻辑用 Node 合成测试，不启动浏览器。新增覆盖 `quickstart`、`autostart-*`、`--start-hidden`、字体回退与 ttk 控件接线。
+- 真机验收：FlClash 上启动面板核对 10 项与实际一致；关闭代理核心后 5–10 秒内出现告警；恢复后收到恢复提示。本次以合成配置启动面板 6 秒无异常；开机自启的快捷方式参数用记录型 runner 验证，真实登录与不同 Windows 版本未逐项验收（not_run）。
+- 已知限制：托盘依赖 PowerShell 与 WinForms；通知可能被系统专注助手抑制；`unknown` 不等于正常；客户端升级可能改变进程名、TUN 名称或配置键名，自动识别不到时用 `process_names`、`tun_match`、`config_format` 显式指定；开机自启依赖程序目录和配置路径不变，移动后需要重新开启。

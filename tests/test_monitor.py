@@ -655,6 +655,139 @@ class Launcher(unittest.TestCase):
         self.assertEqual(argv[argv.index('--config') + 1], str(config_path))
         self.assertEqual(m.launcher_argv(config_path, 30)[-1], '30')
 
+    def test_hidden_launcher_adds_start_hidden(self):
+        self.assertNotIn('--start-hidden', m.launcher_argv(Path('x'), 0))
+        self.assertEqual(m.launcher_argv(Path('x'), 0, hidden=True)[-1], '--start-hidden')
+
+
+class Autostart(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        self.config_path = write_config(self.dir, config(self.dir))
+        self.lnk = self.dir / 'Startup' / 'CCGuard.lnk'
+        patcher = patch.object(m.platform, 'system', return_value='Windows')
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_startup_shortcut_is_in_the_per_user_startup_folder(self):
+        with patch.dict(os.environ, {'APPDATA': str(self.dir)}):
+            path = m.startup_shortcut()
+        self.assertEqual(path.name, 'CCGuard.lnk')
+        self.assertEqual(path.parent.name, 'Startup')
+        self.assertIn('Start Menu', str(path))
+
+    def test_enable_autostart_uses_startup_path_and_hidden_launch(self):
+        runner = RecordingRunner({'registered': True, 'path': str(self.lnk)})
+        result = m.enable_autostart(self.config_path, runner=runner, path=self.lnk)
+        self.assertTrue(result['registered'])
+        argv = runner.calls[0]
+        self.assertEqual(argv[argv.index('-Action') + 1], 'Register')
+        self.assertEqual(argv[argv.index('-Path') + 1], str(self.lnk))
+        launch = argv[argv.index('-Arguments') + 1]
+        self.assertIn('gui', launch)
+        self.assertIn('--tray', launch)
+        self.assertIn('--start-hidden', launch)
+
+    def test_notifier_shortcut_does_not_start_hidden(self):
+        runner = RecordingRunner({'registered': True, 'path': str(self.lnk)})
+        m.register_notifier(self.config_path, runner=runner, path=self.lnk)
+        argv = runner.calls[0]
+        self.assertNotIn('--start-hidden', argv[argv.index('-Arguments') + 1])
+
+    def test_disable_autostart_only_unregisters_our_startup_entry(self):
+        runner = RecordingRunner({'removed': True, 'path': str(self.lnk)})
+        result = m.disable_autostart(runner=runner, path=self.lnk)
+        self.assertTrue(result['removed'])
+        argv = runner.calls[0]
+        self.assertEqual(argv[argv.index('-Action') + 1], 'Unregister')
+        self.assertEqual(argv[argv.index('-Path') + 1], str(self.lnk))
+
+    def test_status_maps_registered_to_enabled(self):
+        runner = RecordingRunner({'registered': True, 'path': str(self.lnk)})
+        self.assertEqual(m.autostart_status(runner=runner, path=self.lnk),
+                         {'enabled': True, 'path': str(self.lnk)})
+
+    def test_other_platforms_are_refused(self):
+        with patch.object(m.platform, 'system', return_value='Linux'):
+            with self.assertRaises(m.MonitorError):
+                m.enable_autostart(self.config_path, runner=RecordingRunner({}), path=self.lnk)
+            with self.assertRaises(m.MonitorError):
+                m.autostart_status(runner=RecordingRunner({}), path=self.lnk)
+
+    def test_cli_autostart_status_needs_no_config(self):
+        with patch.object(m, 'autostart_status', return_value={'enabled': False}):
+            self.assertEqual(m.main(['autostart-status']), 0)
+
+    def test_cli_autostart_enable_requires_config(self):
+        self.assertEqual(m.main(['autostart-enable']), 2)
+
+
+class Quickstart(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_detects_client_and_writes_a_valid_config(self):
+        path = self.dir / 'monitor.json'
+        cfg, out, created = m.quickstart_config(
+            path, providers=FakeProviders(raw_state(processes=['FlClashCore'])))
+        self.assertTrue(created)
+        self.assertEqual(out, path)
+        self.assertEqual(cfg['proxy']['client'], 'flclash')
+        self.assertEqual(cfg['proxy']['tun_adapter'], 'auto')
+        self.assertEqual(cfg['proxy']['runtime_config'], '')
+        self.assertEqual(m.load_config(path), cfg)
+
+    def test_explicit_client_and_runtime_config(self):
+        runtime = self.dir / 'config.yaml'
+        runtime.write_text('ipv6: false\n', encoding='utf-8')
+        path = self.dir / 'monitor.json'
+        cfg, _, _ = m.quickstart_config(path, client='sing-box', runtime_config=str(runtime),
+                                        providers=FakeProviders(raw_state()))
+        self.assertEqual(cfg['proxy']['client'], 'sing-box')
+        self.assertEqual(cfg['proxy']['runtime_config'], str(runtime))
+
+    def test_existing_config_is_never_overwritten(self):
+        path = write_config(self.dir, config(self.dir))
+        before = path.read_bytes()
+        cfg, out, created = m.quickstart_config(path, providers=FakeProviders(raw_state()))
+        self.assertFalse(created)
+        self.assertEqual(out, path)
+        self.assertEqual(path.read_bytes(), before)
+        self.assertEqual(cfg['proxy']['process_names'], ['FlClashCore'])
+
+    def test_relative_runtime_config_is_rejected(self):
+        with self.assertRaises(m.MonitorError):
+            m.quickstart_config(self.dir / 'monitor.json', runtime_config='config.yaml',
+                                providers=FakeProviders(raw_state()))
+
+    def test_unknown_client_is_rejected(self):
+        with self.assertRaises(m.MonitorError):
+            m.quickstart_config(self.dir / 'monitor.json', client='unknown',
+                                providers=FakeProviders(raw_state()))
+
+    def test_default_path_uses_localappdata(self):
+        with patch.dict(os.environ, {'LOCALAPPDATA': str(self.dir)}, clear=True):
+            path = m.default_config_path()
+        self.assertEqual(path, self.dir / 'CCGuard' / 'monitor.json')
+
+    def test_cli_quickstart_no_launch_writes_config(self):
+        path = self.dir / 'monitor.json'
+        with patch.object(m, 'detect', return_value={'client_guesses': ['flclash']}):
+            self.assertEqual(m.main(['quickstart', '--no-launch', '--output', str(path)]), 0)
+        self.assertEqual(m.load_config(path)['proxy']['client'], 'flclash')
+
+    def test_cli_start_hidden_requires_tray(self):
+        path = write_config(self.dir, config(self.dir))
+        self.assertEqual(m.main(['gui', '--config', str(path), '--start-hidden']), 2)
+
 
 class ProbeProcess(unittest.TestCase):
     def test_probe_never_opens_a_console_window(self):

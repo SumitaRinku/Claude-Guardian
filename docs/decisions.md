@@ -664,3 +664,11 @@ v1 只覆盖 Windows，其他平台记 `unknown` 而不冒充支持；`desktop` 
 配置解析在原有 Clash/Mihomo YAML 白名单键之外，增加 sing-box（顶层 `tun` 或 `inbounds[type=tun]`、`strict_route`、`inet4/inet6_address` 或 1.11+ 的 `address`、`route.rules` 的 `hijack-dns`）和 Xray（`dns.queryStrategy`、`routing.domainStrategy`、`sniffing.destOverride` 的 `dns`）的 JSON 映射。格式可自动识别或强制指定；格式不表达、键名变化或配置留空时仍记 `unknown`，不推测为通过。物理网卡排除自动识别到的 TUN，避免 TUN 的 DNS/IPv6 行干扰物理网卡检查。
 
 边界不变：只读、不联网、不调用 `Set-*`、不需要管理员、不安装服务或自启；仍只覆盖 Windows。预设与键名映射是对公开配置结构的适配，不代表每个客户端版本已真机验收；未验证项在文档标 unknown。风险是自动识别可能因重命名误判，可用 `process_names`、`tun_match`、`config_format` 显式覆盖。验证见 CHANGELOG，回滚使用普通 revert。
+
+## ADR-078：一键启动、开机自启与面板改进（2026-11-16，MONITOR-UX-20261116）
+
+需求是降低首次使用成本、提供可选的登录自启，并改善 tkinter 面板与中文字体回退。新增 `quickstart`：读取主机名、调用 `detect` 识别客户端与 TUN，写入 `%LOCALAPPDATA%\CCGuard\monitor.json`（已有配置不覆盖）后打开面板；可选 `--client`、`--runtime-config`、`--no-launch`、`--autostart`。快速配置默认不校验放行规则数量和 DNS 期望值，避免未配置项造成误导；`runtime_config` 留空时三项配置检查为 `unknown`，不推测为通过。
+
+开机自启是显式 opt-in：`autostart-enable` 只在当前用户 Startup 目录创建一个带 `CCGuard.Monitor` 身份的 `CCGuard.lnk`，目标为 `gui --config <配置> --tray --start-hidden`；`autostart-disable` 只删除这个快捷方式，`autostart-status` 查看状态。默认不写自启，不安装服务或计划任务，不需要管理员。`--start-hidden` 必须与 `--tray` 同时使用，避免窗口隐藏后无法找回。
+
+界面改为左侧栏 + 状态卡片 + ttk 控件；字体按用户字体优先、已安装回退选择，界面和日志使用 CJK 字体，日志不再用 Consolas 等无中文字形的等宽字体。窗口尺寸按屏幕收敛并居中。边界不变：只读、不出站、不碰凭据；开机自启依赖程序目录和配置路径不变，移动后需重新开启；quickstart 的默认值不是验收结论，`unknown` 和 `degraded` 仍需人工核对。验证见 CHANGELOG，回滚使用普通 revert。

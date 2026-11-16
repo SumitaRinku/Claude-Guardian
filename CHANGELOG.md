@@ -1,5 +1,15 @@
 # 版本记录
 
+## 一键启动、开机自启与面板改进（2026-11-16，MONITOR-UX-20261116，ADR-078）
+
+- 新增 `quickstart`：自动识别主机名、客户端与 TUN，在 `%LOCALAPPDATA%\CCGuard\monitor.json` 生成配置并打开面板；已有配置不覆盖。支持 `--client`、`--runtime-config`、`--no-launch`、`--autostart`。快速配置默认 `min_allow_rules: 0`、`expect_dns_servers: []`、`runtime_config: ""`，避免未配置项造成误导性告警；需要时在设置页或 JSON 补
+- 新增可选开机自启：`autostart-enable`／`autostart-disable`／`autostart-status` 和面板左侧栏复选框，只在当前用户 Startup 目录创建一个带 CCGuard 身份的 `CCGuard.lnk`，目标为 `gui --config <配置> --tray --start-hidden`；默认关闭，不需要管理员，不建服务或计划任务；移动程序或配置后需重新开启
+- 新增 `gui --start-hidden`：与 `--tray` 一起用时启动即隐藏到托盘；autostart 使用该入口，登录不弹窗
+- 界面改进：左侧栏导航、状态卡片、ttk Spinbox／Checkbutton／Scrollbar、打开配置按钮；字体按已安装字体回退，界面和日志用 `Microsoft YaHei UI`／`Segoe UI`，标题 `Segoe UI Semibold`，代码 `Cascadia Mono`／`Consolas`；日志不再用无中文字形的等宽字体。窗口尺寸按屏幕缩放收敛并居中
+- `write_config` 统一为校验后原子替换；`monitor_gui.save_config` 复用它
+- 验证：`python -m unittest tests.test_monitor tests.test_monitor_gui -v` 104 项通过；完整套件 1696 项通过（442 项 POSIX 专属跳过）；`node tests/monitor-interaction.cjs` 与 `compileall` 通过；以 `quickstart --no-launch` 生成配置后启动 `gui` 6 秒无异常（无可见桌面截图）。开机自启快捷方式参数用记录型 runner 验证；真实登录与不同 Windows 版本未验收（not_run）
+- 风险与回滚：开机自启依赖程序目录与配置路径不变；quickstart 默认不校验放行规则数量和 DNS 期望值；界面仍是 tkinter，字体效果取决于系统字体。仅影响监测脚本、面板、文档与会话快捷方式；回滚使用普通 revert，已开启的自启用 `autostart-disable` 删除
+
 ## README 重写为 CCGuard 产品说明（2026-11-16，DOCS-README-20261116）
 
 - `README.md` 与 `README.en.md` 改为以 CCGuard 为主体：定位、能力、安全边界、快速开始、客户端预设、10 项检查、配置字段、界面通知、故障排查、项目结构、开发验证、与 Claude-Guardian 的关系、文档与许可

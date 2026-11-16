@@ -36,9 +36,12 @@ CCGuard 是本仓库在 [Claude-Guardian](https://github.com/DUNHKpcc/Claude-Gua
 | 能力 | 说明 |
 | --- | --- |
 | **10 项实时检查** | 代理核心、TUN、默认路由、防火墙、放行规则、核心 IPv6 / 严格路由 / DNS 接管、物理网卡 DNS / IPv6 |
+| **一条命令启动** | `quickstart` 自动识别主机、客户端和 TUN，生成配置并打开面板；已有配置不覆盖 |
 | **状态色盾牌** | 绿 ✓ 正常、橙 ! 降级、红 ✕ 失效、灰 — 未知；窗口、托盘与网页标题同步 |
-| **窗口 + 托盘 + 网页** | tkinter 原生窗口（默认）、托盘通知、`127.0.0.1` 本地网页备选 |
+| **新界面** | 左侧栏导航 + 状态卡片 + ttk 设置控件；中文字体回退到 `Microsoft YaHei UI`，日志不再用无中文字形的等宽字体 |
+| **窗口 + 托盘 + 网页** | tkinter 面板（默认）、托盘通知、`127.0.0.1` 本地网页备选 |
 | **系统通知** | 状态跃迁时提醒，带冷却与恢复提示；可暂停 |
+| **可选开机自启** | 当前用户 Startup 快捷方式，登录后隐藏到托盘；默认关闭，可随时撤销 |
 | **多客户端预设** | FlClash、Clash Verge Rev、Clash Nyanpasu、Clash for Windows、Mihomo / Clash.Meta、sing-box、Hiddify、v2rayN、NekoRay / NekoBox |
 | **TUN 自动识别** | 按网卡名称 / 描述片段识别，客户端升级后通常不用改配置 |
 | **多配置格式** | Clash/Mihomo YAML、sing-box JSON（含 1.11+ `address`）、Xray JSON；读不出记 `unknown` |
@@ -49,7 +52,7 @@ CCGuard 是本仓库在 [Claude-Guardian](https://github.com/DUNHKpcc/Claude-Gua
 - **只读**：不调用 `Set-*`，不改防火墙、路由、代理配置，不重启核心。
 - **不出站**：不发起联网请求，不做出口 IP、DNS 泄露、延迟或 WebRTC 测试；网页模式只监听 `127.0.0.1`。
 - **不要求管理员**：监测以普通用户运行；提权只属于其他防护脚本。
-- **不安装常驻服务**：不建 Windows 服务、计划任务或开机自启。
+- **默认不常驻、不自启**：不建 Windows 服务或计划任务，默认不写 Startup。只有你显式开启「开机自启」时，才在当前用户 Startup 目录创建一个 CCGuard 快捷方式，可随时用 `autostart-disable` 或在面板左侧栏关闭。
 - **不碰凭据**：通知和状态只含状态枚举与检查项名称，不含 IP、路径、节点、订阅链接或配置值。
 - **`unknown` 不等于正常**：查询失败、权限不足、格式不支持或配置留空一律显示未知，不推测为通过。
 
@@ -65,37 +68,56 @@ CCGuard 是本仓库在 [Claude-Guardian](https://github.com/DUNHKpcc/Claude-Gua
 
 ### 2. 获取
 
-**方式 A：Release 包（推荐）**
-
-下载 [`claude-guardian-0.2.0.zip`](https://github.com/SumitaRinku/CCguard/releases/download/v0.2.0/claude-guardian-0.2.0.zip)，解压后得到 `claude-guardian\` 目录。包内是完整的 Claude-Guardian Skill，CCGuard 监测入口是 `claude-guardian\scripts\monitor.py`。
-
-**方式 B：克隆仓库**
+**方式 A：克隆仓库（推荐，含最新界面与自启）**
 
 ```powershell
 git clone https://github.com/SumitaRinku/CCguard.git
 ```
 
-也可以直接下载源码压缩包。仓库内的监测入口是 `skills\claude-guardian\scripts\monitor.py`。
+仓库内的监测入口是 `skills\claude-guardian\scripts\monitor.py`。一键启动、开机自启和新界面在 main 分支。
 
-### 3. 识别本机
+**方式 B：Release 包（v0.2.0）**
+
+下载 [`claude-guardian-0.2.0.zip`](https://github.com/SumitaRinku/CCguard/releases/download/v0.2.0/claude-guardian-0.2.0.zip)，解压后得到 `claude-guardian\` 目录。包内是完整的 Claude-Guardian Skill，监测入口是 `claude-guardian\scripts\monitor.py`。
+
+> v0.2.0 包含多客户端监测；一键启动、开机自启和新界面在 main 分支，下一版发布后才会进入安装包。需要这些功能请用仓库方式。
+
+### 3. 一条命令启动（推荐）
 
 ```bat
-:: Release 包解压后
-python claude-guardian\scripts\monitor.py detect
-
-:: 仓库内
-python skills\claude-guardian\scripts\monitor.py detect
+:: 仓库内（含最新改进）
+python skills\claude-guardian\scripts\monitor.py quickstart
 ```
 
-输出会列出正在运行的已知代理核心、候选 TUN 网卡和可能的 `client` 预设，例如：
+`quickstart` 会读取本机主机名，识别正在运行的已知客户端与 TUN，在 `%LOCALAPPDATA%\CCGuard\monitor.json` 生成配置（已有配置不覆盖），然后打开面板 + 托盘。关掉窗口后托盘继续提醒。
 
-```json
-{"platform":"Windows","cores":["FlClash","FlClashCore"],"tun_adapters":[{"name":"FlClash","description":"Meta Tunnel","status":"Up"}],"client_guesses":["flclash"]}
+常用选项：
+
+```bat
+:: 指定客户端预设
+python ...\monitor.py quickstart --client flclash
+
+:: 指定客户端实际加载的运行配置（绝对路径）
+python ...\monitor.py quickstart --runtime-config "C:\Users\YOU\AppData\Roaming\com.follow\clash\config.yaml"
+
+:: 只生成配置，不打开面板
+python ...\monitor.py quickstart --no-launch
+
+:: 同时开启开机自启（登录后隐藏到托盘）
+python ...\monitor.py quickstart --autostart
 ```
 
-### 4. 写配置
+快速配置默认不校验放行规则数量和 DNS 期望值；需要时在面板设置页或 JSON 里补。`runtime_config` 留空时三项配置检查显示 `unknown`。
 
-把 `assets\monitor\config.example.json` 复制到仓库外的私有目录（例如 `%USERPROFILE%\.ccguard\monitor.json`），至少确认：
+### 4. 手动配置（可选）
+
+想自己填写时，先运行 `detect` 看候选核心和 TUN：
+
+```bat
+python ...\monitor.py detect
+```
+
+然后把 `assets\monitor\config.example.json` 复制到仓库外（例如 `%USERPROFILE%\.ccguard\monitor.json`），至少确认：
 
 - `target`：`python -c "import platform; print(platform.node())"` 的精确输出
 - `proxy.client`：下表中的客户端预设
@@ -105,15 +127,21 @@ python skills\claude-guardian\scripts\monitor.py detect
 
 不要把订阅、节点、密码或令牌写进去；配置里没有这些字段。
 
-### 5. 启动
+### 5. 启动、自启与关闭
 
 ```bat
-python claude-guardian\scripts\monitor.py gui --config "%USERPROFILE%\.ccguard\monitor.json" --tray
+:: 打开面板 + 托盘
+python ...\monitor.py gui --config "%LOCALAPPDATA%\CCGuard\monitor.json" --tray
+
+:: 开启 / 关闭 / 查看开机自启
+python ...\monitor.py autostart-enable --config "%LOCALAPPDATA%\CCGuard\monitor.json"
+python ...\monitor.py autostart-disable
+python ...\monitor.py autostart-status
 ```
 
-仓库内把 `claude-guardian\scripts\monitor.py` 换成 `skills\claude-guardian\scripts\monitor.py`。
+面板左侧栏也有「开机自启」复选框，效果与命令相同。默认关闭；开启后登录 Windows 会自动打开面板并隐藏到托盘，不会弹出窗口。
 
-常用变体：
+其他入口：
 
 ```bat
 :: 单次采集，输出 JSON
@@ -225,7 +253,9 @@ python ...\monitor.py register-notifier --config <private>\monitor.json
 
 ## 界面与通知
 
-- **独立窗口**：状态 / 日志 / 设置三页；设置页可调采集间隔、通知冷却、通知项和暂停提醒。
+- **独立窗口**：左侧栏导航（状态 / 日志 / 设置）+ 状态卡片 + ttk 设置控件；设置页可调采集间隔、通知冷却、通知项和暂停提醒，并可「打开配置」直接编辑 JSON。
+- **开机自启**：左侧栏「开机自启」复选框，登录后自动打开面板并隐藏到托盘；默认关闭，可随时取消。
+- **字体**：优先使用 `fonts/` 里你自备的 Anthropic 字体；缺失时界面和日志回退到 `Microsoft YaHei UI`，标题用 `Segoe UI Semibold`，代码用 `Cascadia Mono`／`Consolas`。日志不再用无中文字形的等宽字体。
 - **关闭窗口**：有托盘时可隐藏到托盘、直接关闭或取消；没有托盘时只提供关闭或取消。
 - **托盘**：盾牌图标随整体状态换色，悬停显示状态；状态跃迁时按冷却发系统通知，恢复也提示。
 - **网页备选**：`serve` 只监听 `127.0.0.1` 的随机端口，路径带随机会话令牌，并校验 `Host`、`Origin`、`Sec-Fetch-Site`，带严格 CSP。
@@ -236,11 +266,14 @@ python ...\monitor.py register-notifier --config <private>\monitor.json
 
 | 现象 | 先做什么 |
 | --- | --- |
+| `quickstart` 没识别到客户端 | 先启动代理客户端，或用 `--client <预设>` 指定；也可先跑 `detect` 看候选 |
 | `proxy_core` 失效 | 运行 `detect` 看核心进程名；用 `process_names` 显式填写 |
 | `tun_adapter` 失效 | 确认客户端 TUN 已开启；用 `detect` 看网卡名；必要时加 `tun_match` |
 | `default_route` 失效 | 确认默认路由走 TUN；检查是否有更高优先级的路由或 VPN |
 | `core_ipv6` / `strict_route` / `dns_hijack` 未知 | 核对 `runtime_config` 是否指向实际运行配置；必要时指定 `config_format` |
 | `dns_servers` / `os_ipv6` 降级 | 订阅更新或客户端升级可能改回 DNS 覆写或 IPv6；恢复后重新核对 |
+| 开机自启没生效 | 确认程序目录和配置路径没有移动；重新勾选或用 `autostart-enable`；检查当前用户 Startup 目录里的 `CCGuard.lnk` |
+| 字体仍不好看 | 把 Anthropic 字体放进 `fonts/`（进程内加载，不安装到系统）；或确认系统有 `Microsoft YaHei UI` |
 | 收不到通知 | 检查 Windows 通知设置与专注助手；面板显示才是准的 |
 | 提示「监测已停止更新」 | 监测进程已退出或采集间隔过长；重新启动面板 |
 | 窗口打不开 | 缺少 tkinter；改用 `serve` 网页版 |
@@ -270,7 +303,7 @@ python tools/package_skill.py --output <new.zip>
 ```
 
 - CI 在 Linux、macOS、Windows 与 Python 3.10 Linux 上运行；`tools/ci_scope.py` 区分文档与代码推送。
-- 当前版本 `v0.2.0`；完整记录见 [CHANGELOG.md](CHANGELOG.md)，设计取舍见 [docs/decisions.md](docs/decisions.md)。
+- 最新发布 `v0.2.0`；main 分支已包含一键启动、开机自启与界面改进。完整记录见 [CHANGELOG.md](CHANGELOG.md)，设计取舍见 [docs/decisions.md](docs/decisions.md)。
 
 ## 完整 Claude-Guardian Skill
 
@@ -310,6 +343,7 @@ git clone https://github.com/SumitaRinku/CCguard.git Claude-Guardian
 - **不要你的凭据**：不用交出 IP、订阅链接、密码、UUID 或完整配置。
 - **准备阶段不碰 Claude**：不启动客户端、不登录、不访问其服务。
 - **按你的环境调整**：系统、客户端和版本可能不同，先核对再操作，出问题就回滚。
+- **开机自启是显式开关**：默认关闭；只有你勾选或执行 `autostart-enable` 时才写一个当前用户 Startup 快捷方式，可随时撤销。
 - **没人能保证免封**：CCGuard 只监测本机状态，不承诺免封，也不替代平台合规与验收。
 
 完整规则见 [分级授权](skills/claude-guardian/references/authorization-tiers.md) 与 [接触与授权边界](skills/claude-guardian/references/contact-and-safety.md)。

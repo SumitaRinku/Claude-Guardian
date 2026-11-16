@@ -169,7 +169,18 @@ class Fonts(unittest.TestCase):
 
     def test_fallbacks_without_user_fonts(self):
         families = gui.font_families([])
-        self.assertEqual(families, {'ui': 'Microsoft YaHei UI', 'serif': 'Georgia', 'mono': 'Consolas'})
+        self.assertEqual(families, {'ui': 'Microsoft YaHei UI', 'serif': 'Segoe UI Semibold',
+                                    'mono': 'Cascadia Mono', 'log': 'Microsoft YaHei UI'})
+
+    def test_installed_fonts_are_preferred_over_missing_fallbacks(self):
+        families = gui.font_families([], {'Microsoft YaHei UI', 'Segoe UI', 'Consolas'})
+        self.assertEqual(families['ui'], 'Microsoft YaHei UI')
+        self.assertEqual(families['serif'], 'Microsoft YaHei UI')
+        self.assertEqual(families['mono'], 'Consolas')
+        self.assertEqual(families['log'], families['ui'])
+
+    def test_log_font_is_cjk_capable_ui_font(self):
+        self.assertEqual(gui.font_families([])['log'], gui.font_families([])['ui'])
 
     def test_family_is_read_from_the_font_not_the_file_name(self):
         path = fake_font(self.dir / 'whatever.otf', 'Anthropic Sans Text')
@@ -185,7 +196,8 @@ class Fonts(unittest.TestCase):
                  fake_font(self.dir / 'd.ttf', 'Anthropic Mono Variable')]
         self.assertEqual(gui.font_families(files), {'ui': 'Anthropic Sans Text',
                                                     'serif': 'Anthropic Serif Web Text',
-                                                    'mono': 'Anthropic Mono Variable'})
+                                                    'mono': 'Anthropic Mono Variable',
+                                                    'log': 'Anthropic Sans Text'})
         self.assertEqual(gui.font_families(files[:1])['ui'], 'Anthropic Sans Web Text')
 
     def test_discovery_includes_subfolders_and_both_formats(self):
@@ -227,6 +239,16 @@ class Logo(unittest.TestCase):
         self.assertIn('root.iconphoto(False,', source)
         self.assertNotIn('.iconbitmap(', source)
         self.assertIn('SetCurrentProcessExplicitAppUserModelID', source)
+
+
+class UiWiring(unittest.TestCase):
+    def test_ttk_controls_autostart_and_hidden_start_are_wired(self):
+        source = (SCRIPTS / 'monitor_gui.py').read_text(encoding='utf-8')
+        for text in ('ttk.Spinbox', 'ttk.Checkbutton', 'ttk.Scrollbar',
+                     'engine.enable_autostart(config_path)', 'engine.disable_autostart()',
+                     'start_hidden', "text='开机自启'", 'if start_hidden and tray_alive():'):
+            self.assertIn(text, source)
+        self.assertIn("families['log']", source)
 
 
 class Assets(unittest.TestCase):

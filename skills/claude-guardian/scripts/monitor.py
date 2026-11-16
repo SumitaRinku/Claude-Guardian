@@ -226,6 +226,20 @@ def detect_core_format(path, text):
     return 'unknown' if stripped.startswith('{') else 'clash'
 
 
+def write_config(path, cfg):
+    """Validate first, then replace the file atomically; a failed write never leaves a broken config."""
+    validate_config(cfg)
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + '.tmp')
+    try:
+        tmp.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+        os.replace(tmp, path)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+
+
 def read_core_config(path, config_format='auto'):
     """Whitelisted scalar keys only; never returns proxies, groups or credentials.
 
@@ -862,20 +876,32 @@ def _shortcut_tool(action, path, runner=subprocess.run, **values):
         proc = runner(argv, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=60,
                       creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
     except (OSError, subprocess.TimeoutExpired):
-        raise MonitorError('无法运行 PowerShell 处理开始菜单快捷方式。') from None
+        raise MonitorError('无法运行 PowerShell 处理快捷方式。') from None
     try:
         result = json.loads((proc.stdout or '').strip().lstrip('﻿') or 'null')
     except ValueError:
         result = None
     if proc.returncode != 0 or not isinstance(result, dict):
-        raise MonitorError('开始菜单快捷方式操作失败：' + ((result or {}).get('error') if isinstance(result, dict)
-                                                          else (proc.stderr or '').strip()[:200] or '未知错误'))
+        raise MonitorError('快捷方式操作失败：' + ((result or {}).get('error') if isinstance(result, dict)
+                                                  else (proc.stderr or '').strip()[:200] or '未知错误'))
     return result
 
 
 def _require_windows():
     if platform.system() != 'Windows':
-        raise MonitorError('通知名称注册只适用于 Windows。')
+        raise MonitorError('快捷方式操作只适用于 Windows。')
+
+
+def _install_shortcut(config_path, path, hidden, runner):
+    _require_windows()
+    config_path = Path(config_path).resolve()
+    load_config(config_path)
+    argv = launcher_argv(config_path, 0, hidden=hidden)
+    pythonw = Path(sys.executable).with_name('pythonw.exe')
+    target = pythonw if pythonw.is_file() else Path(sys.executable)
+    return _shortcut_tool('Register', path, runner,
+                          Target=target, Arguments=subprocess.list2cmdline(argv[1:]),
+                          Icon=ICON.resolve(), WorkingDirectory=Path(__file__).resolve().parent)
 
 
 def notifier_status(runner=subprocess.run, path=None):
@@ -891,15 +917,7 @@ def register_notifier(config_path, runner=subprocess.run, path=None):
     build 26300: the toast was dropped silently); the documented path for unpackaged apps is a
     Start menu shortcut carrying System.AppUserModel.ID. The shortcut also launches the panel.
     """
-    _require_windows()
-    config_path = Path(config_path).resolve()
-    load_config(config_path)
-    argv = launcher_argv(config_path, 0)
-    pythonw = Path(sys.executable).with_name('pythonw.exe')
-    target = pythonw if pythonw.is_file() else Path(sys.executable)
-    return _shortcut_tool('Register', path or start_menu_shortcut(), runner,
-                          Target=target, Arguments=subprocess.list2cmdline(argv[1:]),
-                          Icon=ICON.resolve(), WorkingDirectory=Path(__file__).resolve().parent)
+    return _install_shortcut(config_path, path or start_menu_shortcut(), False, runner)
 
 
 def unregister_notifier(runner=subprocess.run, path=None):
@@ -908,9 +926,77 @@ def unregister_notifier(runner=subprocess.run, path=None):
     return _shortcut_tool('Unregister', path or start_menu_shortcut(), runner)
 
 
-def launcher_argv(config_path, idle_minutes):
-    return [sys.executable, str(Path(__file__).resolve()), 'gui', '--config', str(config_path),
+def startup_shortcut():
+    """The per-user Startup entry used by the optional login autostart (no admin rights)."""
+    appdata = os.environ.get('APPDATA')
+    if not appdata:
+        raise MonitorError('找不到当前用户的 APPDATA 目录。')
+    return Path(appdata) / 'Microsoft' / 'Windows' / 'Start Menu' / 'Programs' / 'Startup' / (APP_NAME + '.lnk')
+
+
+def autostart_status(runner=subprocess.run, path=None):
+    """{'enabled': bool, ...}: the Startup shortcut exists and carries our app id."""
+    _require_windows()
+    result = _shortcut_tool('Status', path or startup_shortcut(), runner)
+    return {'enabled': bool(result.get('registered')), 'path': result.get('path')}
+
+
+def enable_autostart(config_path, runner=subprocess.run, path=None):
+    """Opt-in: create a per-user Startup shortcut that opens the panel hidden in the tray."""
+    return _install_shortcut(config_path, path or startup_shortcut(), True, runner)
+
+
+def disable_autostart(runner=subprocess.run, path=None):
+    """Remove only our Startup shortcut; never touches anything else."""
+    _require_windows()
+    return _shortcut_tool('Unregister', path or startup_shortcut(), runner)
+
+
+def launcher_argv(config_path, idle_minutes, hidden=False):
+    argv = [sys.executable, str(Path(__file__).resolve()), 'gui', '--config', str(config_path),
             '--tray', '--idle-minutes', str(idle_minutes)]
+    if hidden:
+        argv.append('--start-hidden')
+    return argv
+
+
+def default_config_path():
+    base = os.environ.get('LOCALAPPDATA') or os.environ.get('APPDATA')
+    if not base:
+        raise MonitorError('找不到当前用户的 LOCALAPPDATA 目录。')
+    return Path(base) / APP_NAME / 'monitor.json'
+
+
+def quickstart_config(path=None, client='auto', runtime_config='', providers=None):
+    """Create a usable config from detected values; never overwrite an existing file."""
+    if client not in ('', 'auto', 'custom') and client not in CLIENT_PRESETS:
+        raise MonitorError('client 必须是 auto、custom 或已知预设。')
+    runtime = '' if not runtime_config else str(Path(runtime_config).expanduser())
+    if runtime and not Path(runtime).is_absolute():
+        raise MonitorError('运行配置必须是绝对路径。')
+    path = Path(path).expanduser() if path else default_config_path()
+    if path.exists():
+        return load_config(path), path, False
+    try:
+        found = detect(providers)
+    except MonitorError:
+        found = {'client_guesses': []}
+    if client in ('', 'auto'):
+        guesses = found.get('client_guesses') or []
+        chosen = guesses[0] if guesses else 'custom'
+    else:
+        chosen = client
+    cfg = {
+        'version': 1,
+        'target': platform.node(),
+        'proxy': {'client': chosen, 'tun_adapter': 'auto', 'config_format': 'auto',
+                  'runtime_config': runtime},
+        'firewall': {'expect_default_block': True, 'allow_rule_prefix': 'guardian-', 'min_allow_rules': 0},
+        'network': {'expect_dns_servers': [], 'expect_ipv6_disabled': True},
+        'alerts': {'cooldown_seconds': 120, 'notify_states': ['fail', 'degraded'], 'interval_seconds': 5},
+    }
+    write_config(path, cfg)
+    return cfg, path, True
 
 
 def desktop(config_path, output, idle_minutes=0):
@@ -993,17 +1079,53 @@ def main(argv=None):
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, 'reconfigure'):
             stream.reconfigure(encoding='utf-8')
-    parser = argparse.ArgumentParser(description='Claude-Guardian 本机实时监测（只读、不联网）')
-    parser.add_argument('action', choices=['check', 'detect', 'serve', 'gui', 'desktop',
-                                           'register-notifier', 'unregister-notifier', 'notifier-status'])
+    parser = argparse.ArgumentParser(description='CCGuard 本机实时监测（只读、不联网）')
+    parser.add_argument('action', choices=['quickstart', 'check', 'detect', 'serve', 'gui', 'desktop',
+                                           'register-notifier', 'unregister-notifier', 'notifier-status',
+                                           'autostart-enable', 'autostart-disable', 'autostart-status'])
     parser.add_argument('--config', type=Path)
     parser.add_argument('--tray', action='store_true')
+    parser.add_argument('--start-hidden', action='store_true')
     parser.add_argument('--no-browser', action='store_true')
+    parser.add_argument('--no-launch', action='store_true')
+    parser.add_argument('--autostart', action='store_true')
+    parser.add_argument('--client', default='auto')
+    parser.add_argument('--runtime-config', type=Path)
     parser.add_argument('--idle-minutes', type=int, default=None)
     parser.add_argument('--state-dir', type=Path)
     parser.add_argument('--output', type=Path)
     args = parser.parse_args(argv)
     try:
+        if args.action == 'quickstart':
+            cfg, config_path, created = quickstart_config(
+                args.output, args.client, str(args.runtime_config) if args.runtime_config else '')
+            print(('已创建配置：' if created else '沿用现有配置：') + str(config_path))
+            if args.autostart:
+                result = enable_autostart(config_path)
+                print('已开启开机自启（仅当前用户）：' + result['path'] +
+                      '\n登录 Windows 后会自动打开面板并隐藏到托盘。关闭：autostart-disable')
+            if args.no_launch:
+                return 0
+            from monitor_gui import run
+            run(cfg, config_path, tray=True)
+            return 0
+        if args.action == 'autostart-enable':
+            if args.config is None:
+                raise MonitorError('请用 --config 指定监测配置；开机自启会用它启动面板。')
+            result = enable_autostart(args.config)
+            print('已开启开机自启（仅当前用户）：' + result['path'] +
+                  '\n登录 Windows 后会自动打开面板并隐藏到托盘。关闭：autostart-disable')
+            return 0
+        if args.action == 'autostart-disable':
+            result = disable_autostart()
+            print('已关闭开机自启。' if result.get('removed') else '未开启，无需关闭。')
+            return 0
+        if args.action == 'autostart-status':
+            if platform.system() != 'Windows':
+                print(json.dumps({'enabled': False}))
+            else:
+                print(json.dumps(autostart_status(), ensure_ascii=False))
+            return 0
         if args.action == 'register-notifier':
             if args.config is None:
                 raise MonitorError('请用 --config 指定监测配置；开始菜单入口会用它启动面板。')
@@ -1040,8 +1162,10 @@ def main(argv=None):
                       idle_minutes=idle)
             return 0
         if args.action == 'gui':
+            if args.start_hidden and not args.tray:
+                raise MonitorError('隐藏启动需要同时加 --tray，否则窗口无法找回。')
             from monitor_gui import run
-            run(cfg, args.config, tray=args.tray)
+            run(cfg, args.config, tray=args.tray, start_hidden=args.start_hidden)
             return 0
         if args.output is None:
             raise MonitorError('请用 --output 指定新的入口目录。')

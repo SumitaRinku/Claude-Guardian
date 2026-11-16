@@ -1,8 +1,6 @@
 """Native tkinter panel for the read-only monitor: no browser, no third-party dependencies."""
 from collections import deque
-import copy
 import ctypes
-import json
 import os
 from pathlib import Path
 import platform
@@ -23,6 +21,11 @@ PALETTE = {
     'accent': '#b4552f',
     'accent_dark': '#9a4726',
     'soft': '#efe9df',
+    'sidebar': '#22262b',
+    'sidebar_hover': '#30353c',
+    'sidebar_text': '#f7f4ef',
+    'sidebar_muted': '#aeb3ba',
+    'line_dark': '#3a4048',
 }
 LABELS = {
     'proxy_core': '代理核心',
@@ -95,15 +98,7 @@ def apply_settings(cfg, interval, cooldown, notify_states, paused=False):
 
 def save_config(path, cfg):
     """Validate first, then replace the file atomically, so a failed save never leaves a broken config."""
-    engine.validate_config(copy.deepcopy(cfg))
-    path = Path(path)
-    tmp = path.with_name(path.name + '.tmp')
-    try:
-        tmp.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-        os.replace(tmp, path)
-    finally:
-        if tmp.exists():
-            tmp.unlink()
+    engine.write_config(path, cfg)
 
 
 def close_choices(tray_alive):
@@ -125,7 +120,13 @@ FONT_PREFERENCES = {
     'serif': ('Anthropic Serif Web Text', 'Anthropic Serif Text'),
     'mono': ('Anthropic Mono Variable', 'Anthropic Mono'),
 }
-FONT_FALLBACKS = {'ui': 'Microsoft YaHei UI', 'serif': 'Georgia', 'mono': 'Consolas'}
+# Fallbacks are ordered lists so the runtime can pick the first family Windows actually installed.
+# The UI and log use a CJK-capable family; the code font stays monospace for ASCII codes.
+FONT_FALLBACKS = {
+    'ui': ('Microsoft YaHei UI', 'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei'),
+    'serif': ('Segoe UI Semibold', 'Microsoft YaHei UI', 'Segoe UI'),
+    'mono': ('Cascadia Mono', 'Consolas', 'Microsoft YaHei UI'),
+}
 
 
 def font_files(folders=FONT_DIRS):
@@ -172,11 +173,22 @@ def register_font_files(files):
     return registered
 
 
-def font_families(registered):
-    available = {font_family(path) for path in registered} - {None}
+def font_families(registered, installed=None):
+    """Resolve each role: a user-supplied font first, then the first installed fallback."""
+    supplied = {font_family(path) for path in registered} - {None}
     chosen = {}
     for role, preferred in FONT_PREFERENCES.items():
-        chosen[role] = next((name for name in preferred if name in available), FONT_FALLBACKS[role])
+        name = next((item for item in preferred if item in supplied), None)
+        if name is None:
+            candidates = FONT_FALLBACKS[role]
+            if installed:
+                found = tuple(item for item in candidates if item in installed)
+                if found:
+                    candidates = found
+            name = candidates[0]
+        chosen[role] = name
+    # Log lines mix Chinese and ASCII; a CJK-capable UI font is far more legible than Consolas.
+    chosen['log'] = chosen['ui']
     return chosen
 
 
@@ -214,17 +226,17 @@ def rounded_points(x1, y1, x2, y2, radius):
             x1, y2, x1, y2 - radius, x1, y1 + radius, x1, y1]
 
 
-def run(cfg, config_path, tray=False):
+def run(cfg, config_path, tray=False, start_hidden=False):
     try:
         import tkinter as tk
         from tkinter import font as tkfont
+        from tkinter import ttk
     except ImportError:
         raise engine.MonitorError('本机缺少 tkinter，无法打开独立面板；可改用 serve 网页版。') from None
 
-    families = font_families(register_font_files(font_files()))
-    ui, serif, mono = families['ui'], families['serif'], families['mono']
     enable_dpi()
     set_app_id()
+    registered = register_font_files(font_files())
 
     state_dir = Path(tempfile.mkdtemp(prefix='guardian-monitor-gui-'))
     state_path = state_dir / 'state.json'
@@ -247,17 +259,42 @@ def run(cfg, config_path, tray=False):
         scale = max(1.0, root.winfo_fpixels('1i') / 96.0)
     except Exception:
         pass
-    root.geometry('%dx%d' % (int(920 * scale), int(700 * scale)))
-    root.minsize(int(740 * scale), int(520 * scale))
-    for name in ('TkDefaultFont', 'TkTextFont', 'TkMenuFont', 'TkHeadingFont'):
+    families = font_families(registered, set(tkfont.families(root)))
+    ui, serif, mono, log_font = families['ui'], families['serif'], families['mono'], families['log']
+    for name, size, weight in (('TkDefaultFont', 10, 'normal'), ('TkTextFont', 10, 'normal'),
+                               ('TkMenuFont', 10, 'normal'), ('TkHeadingFont', 11, 'bold'),
+                               ('TkTooltipFont', 9, 'normal')):
         try:
-            tkfont.nametofont(name).configure(family=ui, size=10)
+            tkfont.nametofont(name).configure(family=ui, size=size, weight=weight)
         except Exception:
             pass
     try:
         tkfont.nametofont('TkFixedFont').configure(family=mono, size=9)
     except Exception:
         pass
+    style = ttk.Style(root)
+    try:
+        if 'clam' in style.theme_names():
+            style.theme_use('clam')
+    except Exception:
+        pass
+    style.configure('TSpinbox', fieldbackground=PALETTE['soft'], background=PALETTE['soft'],
+                    foreground=PALETTE['ink'], bordercolor=PALETTE['line'],
+                    arrowcolor=PALETTE['muted'], font=(ui, 10))
+    style.configure('TCheckbutton', background=PALETTE['card'], foreground=PALETTE['ink'],
+                    font=(ui, 10))
+    style.map('TCheckbutton', background=[('active', PALETTE['card'])],
+              foreground=[('active', PALETTE['ink'])])
+    style.configure('Vertical.TScrollbar', background=PALETTE['line'], troughcolor=PALETTE['paper'],
+                    bordercolor=PALETTE['paper'], arrowcolor=PALETTE['muted'])
+    style.configure('Horizontal.TScrollbar', background=PALETTE['line'], troughcolor=PALETTE['paper'],
+                    bordercolor=PALETTE['paper'], arrowcolor=PALETTE['muted'])
+    screen_w, screen_h = root.winfo_screenwidth(), root.winfo_screenheight()
+    width = min(int(1000 * scale), max(760, screen_w - 80))
+    height = min(int(740 * scale), max(560, screen_h - 80))
+    root.geometry('%dx%d+%d+%d' % (width, height, max(0, (screen_w - width) // 2),
+                                   max(0, (screen_h - height) // 3)))
+    root.minsize(min(int(840 * scale), width), min(int(600 * scale), height))
     log = LogBuffer()
     rendered = {'log': 0, 'states': {}, 'icon': None}
 
@@ -272,11 +309,8 @@ def run(cfg, config_path, tray=False):
                            activebackground=PALETTE['line'], activeforeground=PALETTE['ink'])
         return tk.Button(parent, **options)
 
-    header = tk.Frame(root, bg=PALETTE['paper'], padx=int(22 * scale), pady=int(16 * scale))
-    header.pack(fill='x')
-    # Shield logo in the header, recoloured with the overall state like the tray icon.
-    # Title-bar/taskbar icons come from the same PNGs via iconphoto: Tk's iconbitmap cannot read
-    # the PNG-compressed 256 px frame of the .ico and silently left the default window icon.
+    # Shield logo and window icons. Title-bar/taskbar icons come from the same PNGs via iconphoto:
+    # Tk's iconbitmap cannot read the PNG-compressed 256 px frame of the .ico.
     logos, window_icons = {}, {}
     for state_name in engine.STATES:
         try:
@@ -300,67 +334,131 @@ def run(cfg, config_path, tray=False):
         return False
 
     set_window_icon('unknown')
-    logo = tk.Label(header, bg=PALETTE['paper'], bd=0)
+
+    shell = tk.Frame(root, bg=PALETTE['paper'])
+    shell.pack(fill='both', expand=True)
+    sidebar = tk.Frame(shell, bg=PALETTE['sidebar'], width=int(212 * scale))
+    sidebar.pack(side='left', fill='y')
+    sidebar.pack_propagate(False)
+    content = tk.Frame(shell, bg=PALETTE['paper'])
+    content.pack(side='left', fill='both', expand=True)
+
+    brand = tk.Frame(sidebar, bg=PALETTE['sidebar'], padx=int(18 * scale), pady=int(18 * scale))
+    brand.pack(fill='x')
+    logo = tk.Label(brand, bg=PALETTE['sidebar'], bd=0)
     if logos.get('unknown'):
         logo.configure(image=logos['unknown'])
-        logo.pack(side='left', padx=(0, int(12 * scale)))
-    titles = tk.Frame(header, bg=PALETTE['paper'])
-    titles.pack(side='left')
-    tk.Label(titles, text=engine.APP_NAME, bg=PALETTE['paper'], fg=PALETTE['ink'],
-             font=(serif, 17)).pack(anchor='w')
-    subtitle = tk.Label(titles, text='只读监测 · 不联网 · 不改系统', bg=PALETTE['paper'],
-                        fg=PALETTE['muted'], font=(ui, 9))
-    subtitle.pack(anchor='w', pady=(2, 0))
+        logo.pack(side='left', padx=(0, int(10 * scale)))
+    brand_text = tk.Frame(brand, bg=PALETTE['sidebar'])
+    brand_text.pack(side='left')
+    tk.Label(brand_text, text=engine.APP_NAME, bg=PALETTE['sidebar'], fg=PALETTE['sidebar_text'],
+             font=(serif, 15)).pack(anchor='w')
+    tk.Label(brand_text, text='只读监测', bg=PALETTE['sidebar'], fg=PALETTE['sidebar_muted'],
+             font=(ui, 9)).pack(anchor='w', pady=(1, 0))
 
-    pill = tk.Canvas(header, width=int(150 * scale), height=int(38 * scale),
+    header = tk.Frame(content, bg=PALETTE['paper'], padx=int(26 * scale), pady=int(18 * scale))
+    header.pack(fill='x')
+    header_left = tk.Frame(header, bg=PALETTE['paper'])
+    header_left.pack(side='left')
+    tk.Label(header_left, text='本机防护', bg=PALETTE['paper'], fg=PALETTE['ink'],
+             font=(ui, 18, 'bold')).pack(anchor='w')
+    subtitle = tk.Label(header_left, text='正在读取本机状态…', bg=PALETTE['paper'],
+                        fg=PALETTE['muted'], font=(ui, 9))
+    subtitle.pack(anchor='w', pady=(3, 0))
+
+    pill = tk.Canvas(header, width=int(158 * scale), height=int(40 * scale),
                      bg=PALETTE['paper'], highlightthickness=0)
     pill.pack(side='right')
     pill_shape = pill.create_polygon(
-        rounded_points(0, 0, int(150 * scale), int(38 * scale), int(12 * scale)),
+        rounded_points(0, 0, int(158 * scale), int(40 * scale), int(12 * scale)),
         smooth=True, fill=COLORS['unknown'])
-    pill_text = pill.create_text(int(75 * scale), int(19 * scale), text='正在读取…',
+    pill_text = pill.create_text(int(79 * scale), int(20 * scale), text='正在读取…',
                                  fill='#ffffff', font=(ui, 10, 'bold'))
 
-    counts = tk.Label(root, text='', bg=PALETTE['paper'], fg=PALETTE['muted'], anchor='w',
-                      padx=int(22 * scale), font=(ui, 9))
+    counts = tk.Label(content, text='', bg=PALETTE['paper'], fg=PALETTE['muted'], anchor='w',
+                      padx=int(28 * scale), font=(ui, 9))
     counts.pack(fill='x')
 
-    nav = tk.Frame(root, bg=PALETTE['paper'], padx=int(20 * scale))
-    nav.pack(fill='x', pady=(int(8 * scale), 0))
-    body = tk.Frame(root, bg=PALETTE['paper'])
-    body.pack(fill='both', expand=True, padx=int(16 * scale), pady=(int(6 * scale), int(6 * scale)))
+    status_label = tk.Label(content, text='只读监测 · 不联网 · 不改系统', anchor='w',
+                            padx=int(26 * scale), pady=int(8 * scale), bg=PALETTE['paper'],
+                            fg=PALETTE['muted'], font=(ui, 9))
+    status_label.pack(side='bottom', fill='x')
+
+    body = tk.Frame(content, bg=PALETTE['paper'], padx=int(18 * scale), pady=int(6 * scale))
+    body.pack(fill='both', expand=True)
     body.grid_rowconfigure(0, weight=1)
     body.grid_columnconfigure(0, weight=1)
 
-    pages, tabs = {}, {}
+    nav = tk.Frame(sidebar, bg=PALETTE['sidebar'], padx=int(12 * scale), pady=int(8 * scale))
+    nav.pack(fill='x')
+    pages, nav_buttons = {}, {}
     active_tab = {'value': '状态'}
 
     def select(key):
         active_tab['value'] = key
-        for name, (label, underline) in tabs.items():
+        for name, widget in nav_buttons.items():
             active = name == key
-            label.configure(fg=PALETTE['ink'] if active else PALETTE['muted'])
-            underline.configure(bg=PALETTE['accent'] if active else PALETTE['paper'])
+            widget.configure(bg=PALETTE['accent'] if active else PALETTE['sidebar'],
+                             fg='#ffffff' if active else PALETTE['sidebar_text'])
         pages[key].tkraise()
 
     for key in ('状态', '日志', '设置'):
-        holder = tk.Frame(nav, bg=PALETTE['paper'])
-        holder.pack(side='left', padx=(0, int(6 * scale)))
-        label = tk.Label(holder, text=key, bg=PALETTE['paper'], fg=PALETTE['muted'],
-                         font=(ui, 10, 'bold'), padx=int(10 * scale), pady=int(6 * scale),
-                         cursor='hand2')
-        label.pack()
-        underline = tk.Frame(holder, height=max(2, int(2 * scale)), bg=PALETTE['paper'])
-        underline.pack(fill='x')
-        label.bind('<Button-1>', lambda _event, name=key: select(name))
-        tabs[key] = (label, underline)
+        widget = tk.Button(nav, text=key, command=lambda name=key: select(name), anchor='w',
+                           relief='flat', bd=0, padx=int(12 * scale), pady=int(9 * scale),
+                           font=(ui, 11), cursor='hand2', highlightthickness=0,
+                           bg=PALETTE['sidebar'], fg=PALETTE['sidebar_text'],
+                           activebackground=PALETTE['sidebar_hover'],
+                           activeforeground=PALETTE['sidebar_text'])
+        widget.pack(fill='x', pady=(0, int(3 * scale)))
+        widget.bind('<Enter>', lambda _event, target=widget, name=key: target.configure(
+            bg=PALETTE['accent'] if active_tab['value'] == name else PALETTE['sidebar_hover']))
+        widget.bind('<Leave>', lambda _event, target=widget, name=key: target.configure(
+            bg=PALETTE['accent'] if active_tab['value'] == name else PALETTE['sidebar']))
+        nav_buttons[key] = widget
         page = tk.Frame(body, bg=PALETTE['paper'])
         page.grid(row=0, column=0, sticky='nsew')
         pages[key] = page
 
+    footer = tk.Frame(sidebar, bg=PALETTE['sidebar'], padx=int(18 * scale), pady=int(16 * scale))
+    footer.pack(side='bottom', fill='x')
+    autostart_var = tk.BooleanVar(value=False)
+    autostart_state = {'checked': False, 'enabled': False, 'applied': False}
+
+    def toggle_autostart():
+        want = autostart_var.get()
+        autostart_state['applied'] = True
+        try:
+            if want:
+                engine.enable_autostart(config_path)
+            else:
+                engine.disable_autostart()
+        except engine.MonitorError as error:
+            autostart_var.set(not want)
+            status('开机自启未变更：' + str(error))
+            return
+        log.add('启动', '已开启开机自启' if want else '已关闭开机自启')
+        status('已开启开机自启：登录后自动打开面板到托盘' if want else '已关闭开机自启')
+
+    def check_autostart():
+        try:
+            enabled = bool(engine.autostart_status().get('enabled'))
+        except Exception:
+            enabled = False
+        autostart_state.update(checked=True, enabled=enabled)
+
+    threading.Thread(target=check_autostart, daemon=True).start()
+
+    tk.Checkbutton(
+        footer, text='开机自启', variable=autostart_var, command=toggle_autostart,
+        bg=PALETTE['sidebar'], fg=PALETTE['sidebar_text'], activebackground=PALETTE['sidebar'],
+        activeforeground=PALETTE['sidebar_text'], selectcolor='#ffffff',
+        bd=0, highlightthickness=0, font=(ui, 10), anchor='w', cursor='hand2').pack(anchor='w')
+    tk.Label(footer, text='只读 · 不联网 · 不改系统', bg=PALETTE['sidebar'],
+             fg=PALETTE['sidebar_muted'], font=(ui, 8)).pack(anchor='w', pady=(6, 0))
+
     cards_page = pages['状态']
     canvas = tk.Canvas(cards_page, bg=PALETTE['paper'], highlightthickness=0)
-    card_scroll = tk.Scrollbar(cards_page, orient='vertical', command=canvas.yview)
+    card_scroll = ttk.Scrollbar(cards_page, orient='vertical', command=canvas.yview)
     canvas.configure(yscrollcommand=card_scroll.set)
     card_scroll.pack(side='right', fill='y', pady=int(6 * scale))
     canvas.pack(side='left', fill='both', expand=True)
@@ -429,14 +527,14 @@ def run(cfg, config_path, tray=False):
     log_page = pages['日志']
     log_text = tk.Text(log_page, height=12, state='disabled', wrap='word', bg=PALETTE['card'],
                        fg=PALETTE['ink'], relief='flat', padx=int(12 * scale), pady=int(10 * scale),
-                       spacing1=2, highlightthickness=1, highlightbackground=PALETTE['line'],
-                       font=(mono, 9), bd=0)
+                       spacing1=3, highlightthickness=1, highlightbackground=PALETTE['line'],
+                       font=(log_font, 10), bd=0)
     log_text.pack(fill='both', expand=True, side='left', pady=int(6 * scale))
-    log_scroll = tk.Scrollbar(log_page, command=log_text.yview)
+    log_scroll = ttk.Scrollbar(log_page, command=log_text.yview)
     log_scroll.pack(fill='y', side='right', pady=int(6 * scale))
     log_text.configure(yscrollcommand=log_scroll.set)
 
-    settings = tk.Frame(pages['设置'], bg=PALETTE['card'], padx=int(22 * scale), pady=int(20 * scale))
+    settings = tk.Frame(pages['设置'], bg=PALETTE['card'], padx=int(24 * scale), pady=int(22 * scale))
     settings.pack(fill='both', expand=True, pady=int(6 * scale))
     interval_var = tk.StringVar(value=str(cfg['alerts']['interval_seconds']))
     cooldown_var = tk.StringVar(value=str(cfg['alerts']['cooldown_seconds']))
@@ -447,36 +545,35 @@ def run(cfg, config_path, tray=False):
     def section(row, text):
         tk.Label(settings, text=text, bg=PALETTE['card'], fg=PALETTE['muted'], anchor='w',
                  font=(ui, 9, 'bold')).grid(row=row, column=0, columnspan=2, sticky='w',
-                                            pady=(int(12 * scale), int(4 * scale)))
+                                            pady=(int(14 * scale), int(6 * scale)))
 
     def field(row, text, widget):
         tk.Label(settings, text=text, bg=PALETTE['card'], fg=PALETTE['ink'], anchor='w',
                  font=(ui, 10)).grid(row=row, column=0, sticky='w',
-                                     pady=int(5 * scale), padx=(0, int(16 * scale)))
-        widget.grid(row=row, column=1, sticky='w', pady=int(5 * scale))
+                                     pady=int(6 * scale), padx=(0, int(16 * scale)))
+        widget.grid(row=row, column=1, sticky='w', pady=int(6 * scale))
 
     section(0, '采集与通知')
     field(1, '采集间隔（秒，2–3600）',
-          tk.Spinbox(settings, from_=2, to=3600, width=9, textvariable=interval_var,
-                     bg=PALETTE['soft'], relief='flat', font=(ui, 10), bd=0,
-                     highlightthickness=0))
+          ttk.Spinbox(settings, from_=2, to=3600, width=8, textvariable=interval_var,
+                      font=(ui, 10)))
     field(2, '通知冷却（秒，0–86400）',
-          tk.Spinbox(settings, from_=0, to=86400, width=9, textvariable=cooldown_var,
-                     bg=PALETTE['soft'], relief='flat', font=(ui, 10), bd=0,
-                     highlightthickness=0))
+          ttk.Spinbox(settings, from_=0, to=86400, width=8, textvariable=cooldown_var,
+                      font=(ui, 10)))
     section(3, '通知条件')
     row_cursor = 4
     for name, text in (('fail', '失效'), ('degraded', '降级'), ('unknown', '未知')):
-        tk.Checkbutton(settings, text=text, variable=notify_vars[name], bg=PALETTE['card'],
-                       activebackground=PALETTE['card'], anchor='w', bd=0,
-                       highlightthickness=0, font=(ui, 10)).grid(row=row_cursor, column=0,
-                                                                 sticky='w')
+        ttk.Checkbutton(settings, text=text, variable=notify_vars[name]).grid(
+            row=row_cursor, column=0, sticky='w')
         row_cursor += 1
-    tk.Checkbutton(settings, text='暂停提醒（托盘与面板同时生效）', variable=pause_var,
-                   bg=PALETTE['card'], activebackground=PALETTE['card'], bd=0,
-                   highlightthickness=0, font=(ui, 10)).grid(row=row_cursor, column=0,
-                                                              columnspan=2, sticky='w',
-                                                              pady=(int(8 * scale), int(4 * scale)))
+    ttk.Checkbutton(settings, text='暂停提醒（托盘与面板同时生效）', variable=pause_var).grid(
+        row=row_cursor, column=0, columnspan=2, sticky='w',
+        pady=(int(8 * scale), int(4 * scale)))
+    row_cursor += 1
+    tk.Label(settings, text='开机自启在左侧栏切换；开启后登录 Windows 会自动打开面板并隐藏到托盘。',
+             bg=PALETTE['card'], fg=PALETTE['muted'], font=(ui, 9),
+             wraplength=int(620 * scale), justify='left').grid(
+        row=row_cursor, column=0, columnspan=2, sticky='w', pady=(int(6 * scale), 0))
     row_cursor += 1
 
     status_token = {'value': 0}
@@ -521,21 +618,26 @@ def run(cfg, config_path, tray=False):
     def on_refresh():
         status('已触发一次采集' if store.refresh_async() else '上一次采集尚未完成')
 
+    def on_open_config():
+        try:
+            if hasattr(os, 'startfile'):
+                os.startfile(config_path)
+            else:
+                raise OSError
+        except OSError:
+            status('无法打开配置文件：' + str(config_path))
+
     actions = tk.Frame(settings, bg=PALETTE['card'])
-    actions.grid(row=row_cursor, column=0, columnspan=2, sticky='w', pady=(int(10 * scale), 0))
+    actions.grid(row=row_cursor, column=0, columnspan=2, sticky='w', pady=(int(14 * scale), 0))
     button(actions, '应用', on_apply, primary=True).pack(side='left', padx=(0, int(8 * scale)))
     button(actions, '保存到配置', on_save).pack(side='left', padx=(0, int(8 * scale)))
-    button(actions, '立即采集', on_refresh).pack(side='left')
+    button(actions, '立即采集', on_refresh).pack(side='left', padx=(0, int(8 * scale)))
+    button(actions, '打开配置', on_open_config).pack(side='left')
     row_cursor += 1
     tk.Label(settings, text='配置文件：' + str(config_path), bg=PALETTE['card'],
-             fg=PALETTE['muted'], font=(mono, 8), wraplength=int(600 * scale),
+             fg=PALETTE['muted'], font=(log_font, 8), wraplength=int(640 * scale),
              justify='left').grid(row=row_cursor, column=0, columnspan=2, sticky='w',
-                                  pady=(int(14 * scale), 0))
-
-    status_label = tk.Label(root, text='只读监测 · 不联网 · 不改系统', anchor='w',
-                            padx=int(22 * scale), pady=int(8 * scale), bg=PALETTE['paper'],
-                            fg=PALETTE['muted'], font=(ui, 9))
-    status_label.pack(fill='x', side='bottom')
+                                  pady=(int(16 * scale), 0))
     select('状态')
 
     def render(state):
@@ -650,6 +752,9 @@ def run(cfg, config_path, tray=False):
             shutdown()
 
     def tick():
+        if autostart_state['checked'] and not autostart_state['applied']:
+            autostart_var.set(autostart_state['enabled'])
+            autostart_state['applied'] = True
         render(store.read())
         if show_path.exists():
             try:
@@ -666,5 +771,8 @@ def run(cfg, config_path, tray=False):
 
     root.protocol('WM_DELETE_WINDOW', on_close)
     log.add('启动', '监测已启动')
+    if start_hidden and tray_alive():
+        root.withdraw()
+        log.add('面板', '已隐藏到托盘，监测继续')
     tick()
     root.mainloop()
