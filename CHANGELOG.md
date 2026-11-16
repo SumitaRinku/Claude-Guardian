@@ -1,5 +1,13 @@
 # 版本记录
 
+## README 重写为 CCGuard 产品说明（2026-11-16，DOCS-README-20261116）
+
+- `README.md` 与 `README.en.md` 改为以 CCGuard 为主体：定位、能力、安全边界、快速开始、客户端预设、10 项检查、配置字段、界面通知、故障排查、项目结构、开发验证、与 Claude-Guardian 的关系、文档与许可
+- 保留完整 Skill 的安装块、分级授权、本机防火墙（含 macOS PF 已验收范围）、Windows 清理、接触与安全边界和真机反馈模板入口；去掉上游 Partner、Trendshift、Star History 与社区频道等与本项目无关的内容
+- 未改变运行代码、依赖、授权规则或目标机状态
+- 验证：`python -m unittest tests.test_guides tests.test_mac_pf_killswitch tests.test_windows_cleanup_guide tests.test_skill_discoverability tests.test_ci_scope -v` 100 项通过（9 项 POSIX 专属跳过）；README Bash 安装块与 `tests/test_readme_install.py` 的提取规则一致，Linux CI 将实际执行
+- 风险与回滚：仅文档；回滚使用普通 revert
+
 ## 监测适配多代理客户端与配置格式（2026-11-16，MONITOR-MULTI-20261116，ADR-077）
 
 - `proxy` 段新增可选 `client` 预设（FlClash、Clash Verge Rev、Clash Nyanpasu、Clash for Windows、Mihomo / Clash.Meta、sing-box、Hiddify、v2rayN、NekoRay / NekoBox）、`config_format`（auto／clash／sing-box／xray）与 `tun_match`；`process_names`、`tun_adapter`、`runtime_config` 改为可选。预设提供进程名、TUN 名称片段与配置格式，显式字段优先；`tun_adapter` 默认 `auto`，按网卡名称／描述片段识别，客户端升级改网卡名后通常不用改配置；`runtime_config` 留空时三项配置检查记 `unknown`

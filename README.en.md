@@ -1,115 +1,297 @@
 <div align="center">
 
-# Claude-Guardian
+<img src="skills/claude-guardian/assets/monitor/logo-ok.png" width="96" height="96" alt="CCGuard shield">
 
-**Your Agent, armed with real-world experience, helps you prepare, check and stabilize your Claude environment.**
+# CCGuard
 
-Pre-subscription prep · Account signup and pacing · Fixed egress IP · Local / VM / VPS routes · Firewall and route optimization · Tiered authorization
+**A read-only Windows status panel for your proxy, TUN, route, firewall, DNS and IPv6.**
+
+No outbound requests · No system changes · No admin rights · No background service
 
 <p>
-  <a href="https://trendshift.io/repositories/315286?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-315286" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/315286/daily?language=Python" alt="DUNHKpcc%2FClaude-Guardian | Trendshift" width="250" height="55"/></a>
-  <a href="https://trendshift.io/repositories/315286?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-315286" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/315286/daily" alt="DUNHKpcc%2FClaude-Guardian | Trendshift" width="250" height="55"/></a>
+  <img alt="Windows 10/11" src="https://img.shields.io/badge/Windows-10%2F11-0078D4?style=flat-square">
+  <img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white">
+  <img alt="GPL-3.0-only" src="https://img.shields.io/badge/License-GPL--3.0--only-2E7D32?style=flat-square">
+  <a href="https://github.com/SumitaRinku/CCguard/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/SumitaRinku/CCguard?style=flat-square"></a>
 </p>
 
-[中文](README.md) · **English**
+**English** · [中文](README.md)
 
-[What it does](#what-it-does) · [Ground rules](#ground-rules) · [How it works](#how-it-works) · [Tiered authorization](#tiered-authorization-you-dont-need-to-be-there-for-every-step) · [Quick start](#quick-start) · [Choosing a route](#choosing-a-route) · [Docs](#documentation)
-
-[GPL-3.0-only](LICENSE) · [Changelog](CHANGELOG.md) · [Decision log](docs/decisions.md) · [Report an issue](https://github.com/DUNHKpcc/Claude-Guardian/issues)
+[Quick start](#quick-start) · [Checks](#checks) · [Supported clients](#supported-proxy-clients) · [Configuration](#configuration) · [Safety boundaries](#safety-boundaries) · [Docs](#documentation) · [Development](#development-and-verification)
 
 </div>
 
 ---
 
-Claude-Guardian is a Skill for Agents. It hands your Agent the author's and community's real experience, a curated source library and a set of scripts, so the Agent can walk you through preparing your subscription, account, network egress and runtime environment **according to your needs and setup**. Everyone's system, network, budget and goals differ, so it learns about you first and suggests what fits; high-risk steps are yours to decide.
+## What CCGuard is
 
-> The Chinese [README.md](README.md) is the source text; where the two differ, the Chinese version wins. The source library under `skills/` is in Chinese.
+CCGuard is the Windows read-only status panel maintained in this repository on top of [Claude-Guardian](https://github.com/DUNHKpcc/Claude-Guardian). It is for a machine where the proxy, TUN and firewall are already deployed, and answers one question continuously: **is the protection still in place?**
 
-## Partners
+It splits the state into 10 checks and shows them in green / orange / red / grey in a window, a tray icon and an optional local web page; it raises a system notification when a key check fails. The monitor does not change the firewall, restart the proxy, edit the configuration or make any outbound request, so it is safe to leave running.
 
-<table align="center">
-  <tr>
-    <td align="center">
-      <a href="https://api.dpccgaming.xyz"><img src="docs/partners/dpcc-api.svg" alt="DPCC API" width="380" /></a>
-      <br />
-      Don't want to set things up yourself? Try DPCC API — click the image.
-    </td>
-    <td align="center">
-      <a href="https://api.dpccgaming.xyz/guardian"><img src="docs/partners/guardian-setup.svg" alt="Claude-Guardian setup service and Skill website" width="380" /></a>
-      <br />
-      Prefer not to set it up yourself? Done-for-you setup and the Skill website are here — click the image.
-    </td>
-  </tr>
-</table>
+> A passing monitor only means the local state matches the expected configuration. It does not certify egress IP, DNS, accounts or platform acceptance, and it does not guarantee avoiding bans.
+
+> The Chinese [README.md](README.md) is the source text; where the two differ, the Chinese version wins.
 
 ## What it does
 
-| | Capability | What it does |
-| --- | --- | --- |
-| 🧭 | **Route selection** | Helps you choose between local, virtual machine (VM) and remote server (VPS), explaining each route's scope, cost and who it suits |
-| 🌐 | **Fixed egress IP** | Compares three sources (clean airport/proxy service, self-built proxy optionally with a residential exit, shared residential line) and their trade-offs; a short prompt for a self-built `3x-ui` + optimized-route VPS; 17 recommendation reports when picking a VPS |
-| 📝 | **Signup and account pacing** | A recommended beginner combo (Apple in-app purchase + Gmail / Outlook + a clean personal VPS IP + VM or local machine + Pro: high refund success and stability); email signup, Gmail / Outlook / Proton, Free → Pro → Max intervals, quota use, education email; an anti-ban checklist for mobile (iOS / Android) |
-| 💳 | **Subscription and payment** | Picks candidates from the "all AI payment methods" summary by your region, device and budget and explains the risks; you always pay yourself |
-| 🖥️ | **VM route** | Guest OS (Omarchy / macOS), dedicated LAN NIC, build order, and a fail-closed `FlClash TUN` + `nftables` firewall script |
-| ☁️ | **VPS route** | Use a VPS as the dev machine: Ubuntu 24.04, consistent environment, `Xvfb + noVNC` remote desktop, VS Code Remote-SSH, `tmux`, inbound firewall script |
-| 💻 | **Local route** | Clash Verge / FlClash TUN and DNS setup, Windows firewall guided step by step with prompts, PF script on Mac ([accepted scope](skills/claude-guardian/references/local-firewall-prompts.md#mac)) |
-| 🔒 | **Whole-machine uniform egress** | IPv4 only, no IPv6: strict TUN routing, DNS, fallback rules, and evidence checklists for leak and failure drills (Mac, Windows). `egress_verifier.py` rules `established / violated / incomplete` from the evidence you actually observed, without echoing the IP |
-| 📈 | **Route optimization** | The Agent diagnoses and tunes the route item by item: SSH dynamic forwarding, Realm relay, BBR, each with a recorded original value and a rollback |
-| 🩺 | **Failure triage** | `403` / `429` / `529`, billing conflicts, suspected credential leaks: pause retries, gather evidence, then propose the next step |
-| 🧹 | **Cleanup planning** | Plans cleanup of Claude leftovers (Mac, Windows, Linux), moving conversation records only after asking you; after a ban, also clears proxy-client logs, VPN logs and IP-lookup commands in shell history; isolation (recoverable) is confirmed by you, nothing is permanently deleted, source code, Git history and Codex are left alone |
-| 📚 | **Sources with every answer** | Each answer links its sources; beyond them it can search Linux.do, NodeSeek, IDC Flare, V2EX, Reddit and X, labelling source and date; also usable as a search tool for VPS, residential-IP, route and ban-experience posts |
+| Capability | What it does |
+| --- | --- |
+| **10 live checks** | Proxy core, TUN, default route, firewall, allow rules, core IPv6 / strict route / DNS hijack, physical-adapter DNS / IPv6 |
+| **State-coloured shield** | Green ✓ ok, orange ! degraded, red ✕ fail, grey — unknown; window, tray and page title stay in sync |
+| **Window + tray + web** | Native tkinter window (default), tray notifications, local `127.0.0.1` web page as a fallback |
+| **System notifications** | Alerts on state transitions with cooldown and recovery notices; can be paused |
+| **Client presets** | FlClash, Clash Verge Rev, Clash Nyanpasu, Clash for Windows, Mihomo / Clash.Meta, sing-box, Hiddify, v2rayN, NekoRay / NekoBox |
+| **TUN auto-detection** | Matches adapter name / description fragments, so client upgrades usually need no config change |
+| **Multiple config formats** | Clash/Mihomo YAML, sing-box JSON (including 1.11+ `address`), Xray JSON; unreadable fields stay `unknown` |
+| **Candidate detection** | `monitor.py detect` lists candidate cores, TUN adapters and client presets without a config |
 
-## Ground rules
+## Safety boundaries
 
-- **Money and accounts are yours:** you pay, sign up, log in, and do KYC and OAuth yourself.
-- **No credentials needed:** you never hand over IPs, subscription links, passwords, UUIDs or full configs.
-- **No Claude during prep:** the client is not started, logged into or contacted.
-- **Adapted to your environment:** the author has used these tutorials and scripts on their own Mac, Windows, VM and VPS. Your system and app versions may differ, so the Agent checks first, adapts to the differences, and rolls back if something goes wrong.
-- **Nobody can guarantee you won't be banned:** prices and access change fast; glance at the official pages before buying.
-
-## How it works
-
-```mermaid
-flowchart LR
-    U["You: needs and environment"] --> A["Agent<br/>understand, judge, explain"]
-    S["Skill<br/>experience · sources · rules"] --> A
-    A --> Q["Interview state machine<br/>what to ask · which sources to attach · authorization record"]
-    A --> R["Source library<br/>S01–S08 · S10 · R01 · R02"]
-    A --> X["Scripts and prompts<br/>run by you or after approval"]
-    Q --> A
-    X --> V["Verification and rollback"]
-```
-
-- **Agent-led:** understands your needs, picks sources, explains results and decides the next step. The same Skill gives different people different approaches.
-- **State machine as a backstop:** over a hundred interview questions are scheduled by condition; route-specific questions come only after you choose a route, and each assessment lists the sources to attach.
-- **Scripts run as documented:** VM setup, firewall and similar scripts are run by you, or by the Agent once you approve.
-
-## Tiered authorization: you don't need to be there for every step
-
-Only the points that really matter need you. Changes fall into three tiers by risk; see [authorization tiers](skills/claude-guardian/references/authorization-tiers.md):
-
-| Tier | What you do | Includes |
-| --- | --- | --- |
-| 🟢 **A: do within scope** | Confirm the scope once after route and goal are set | Read-only diagnosis, research, proposals, dry runs |
-| 🟡 **B: approve the whole plan once** | Approve one plan; the Agent runs it continuously and undoes it on failure | Installing a client, adding allow rules, foreground forwarding, temporary BBR switch, installing TUN |
-| 🔴 **C: confirm on the spot** | The Agent pauses at that step; reply whenever you see it | Default-outbound block, enabling a firewall, SSH changes, persistent kernel changes, data cleanup, accounts and money, credentials, organization devices, contacting Claude |
-
-Approvals and confirmations come from your explicit reply in the conversation and are recorded in the interview state; a route change needs fresh confirmation.
+- **Read-only**: no `Set-*`, no firewall/route/proxy changes, no core restart.
+- **No outbound traffic**: no IP, DNS-leak, latency or WebRTC probes; the web mode only listens on `127.0.0.1`.
+- **No admin rights**: the monitor runs as a normal user; elevation belongs to other protection scripts.
+- **No resident service**: no Windows service, scheduled task or start-up entry.
+- **No credentials**: notifications and state contain only state names and check IDs, never IPs, paths, nodes, subscription links or config values.
+- **`unknown` is not a pass**: failed queries, missing permissions, unsupported formats or an empty config stay unknown.
 
 ## Quick start
 
-### 1. Install the Skill
+### 1. Requirements
 
-Copy the [`skills/claude-guardian`](skills/claude-guardian) folder from this repository into the Codex Skill directory you use, keeping its internal structure. Keep the root [LICENSE](LICENSE) when redistributing.
+- Windows 10 / 11, PowerShell 5.1
+- Python 3.10+ (the official installer normally includes tkinter)
+- The proxy client running, with TUN and the firewall already deployed
 
-- Requires Codex with Skills support; scripts need **Python 3.10+**
-- The Skill and references can be read directly; you can look things up without running any script
-- The project never installs Python, proxy tools or background services by itself; some static YAML features need the optional PyYAML and stop with an explanation if it is missing
+The monitor uses only the Python standard library; no third-party dependency is needed.
 
-On macOS / Linux, run in Bash (skip `git clone` if you already have the repository):
+### 2. Get it
+
+**Option A: release package (recommended)**
+
+Download [`claude-guardian-0.2.0.zip`](https://github.com/SumitaRinku/CCguard/releases/download/v0.2.0/claude-guardian-0.2.0.zip), extract it, and use the `claude-guardian\` directory. The package is the full Claude-Guardian Skill; the CCGuard entry is `claude-guardian\scripts\monitor.py`.
+
+**Option B: clone the repository**
+
+```powershell
+git clone https://github.com/SumitaRinku/CCguard.git
+```
+
+In the repository the entry is `skills\claude-guardian\scripts\monitor.py`.
+
+### 3. Detect the host
+
+```bat
+:: extracted release package
+python claude-guardian\scripts\monitor.py detect
+
+:: repository
+python skills\claude-guardian\scripts\monitor.py detect
+```
+
+The output lists running known proxy cores, candidate TUN adapters and possible `client` presets:
+
+```json
+{"platform":"Windows","cores":["FlClash","FlClashCore"],"tun_adapters":[{"name":"FlClash","description":"Meta Tunnel","status":"Up"}],"client_guesses":["flclash"]}
+```
+
+### 4. Write the config
+
+Copy `assets\monitor\config.example.json` to a private directory outside the repository (for example `%USERPROFILE%\.ccguard\monitor.json`) and confirm at least:
+
+- `target`: the exact output of `python -c "import platform; print(platform.node())"`
+- `proxy.client`: a preset from the table below
+- `proxy.tun_adapter`: keep `auto`; fill the exact adapter name only when detection fails
+- `proxy.runtime_config`: the absolute path of the config the client actually loads; leave it empty to skip the three config checks
+- `firewall.allow_rule_prefix`, `network.expect_dns_servers`: match your deployment
+
+Never put subscriptions, nodes, passwords or tokens in the file; the schema has no such fields.
+
+### 5. Start it
+
+```bat
+python claude-guardian\scripts\monitor.py gui --config "%USERPROFILE%\.ccguard\monitor.json" --tray
+```
+
+In the repository, replace `claude-guardian\scripts\monitor.py` with `skills\claude-guardian\scripts\monitor.py`.
+
+Common variants:
+
+```bat
+:: one collection, JSON output
+python ...\monitor.py check --config <private>\monitor.json
+
+:: local web page (listens on 127.0.0.1 only, random session token)
+python ...\monitor.py serve --config <private>\monitor.json
+
+:: desktop / Start menu entry (does not add autostart)
+python ...\monitor.py desktop --config <private>\monitor.json --output <new-dir>
+
+:: name notifications CCGuard (creates one per-user Start menu entry)
+python ...\monitor.py register-notifier --config <private>\monitor.json
+```
+
+## Supported proxy clients
+
+`proxy.client` selects a built-in preset that fills process names, TUN hints and the config format; `process_names`, `tun_adapter` and `config_format` can still override it.
+
+| `client` | Default process names (sample) | TUN hints (sample) | Config format |
+| --- | --- | --- | --- |
+| `flclash` | `FlClashCore`, `FlClash` | `flclash`, `meta tunnel` | Clash YAML |
+| `clash-verge-rev` | `verge-mihomo`, `clash-verge` | `clash`, `mihomo`, `meta` | Clash YAML |
+| `clash-nyanpasu` | `clash-nyanpasu`, `mihomo` | `nyanpasu`, `mihomo` | Clash YAML |
+| `clash-for-windows` | `Clash for Windows`, `clash-win64` | `clash` | Clash YAML |
+| `mihomo` | `mihomo`, `clash-meta` | `mihomo`, `meta tunnel` | Clash YAML |
+| `sing-box` | `sing-box` | `sing-box`, `sing-tun` | sing-box JSON |
+| `hiddify` | `Hiddify`, `HiddifyCli`, `sing-box` | `hiddify`, `sing-tun` | sing-box JSON |
+| `v2rayn` | `v2rayN`, `xray`, `v2ray` | `v2rayn`, `tun2socks` | Xray JSON |
+| `nekoray` | `nekoray`, `nekobox`, `sing-box`, `xray` | `nekoray`, `nekobox` | auto |
+
+- **TUN auto-detection**: `tun_adapter` defaults to `auto` and matches name/description fragments; add a `tun_match` fragment when it cannot find the adapter.
+- **Process names**: an omitted `process_names` uses the preset; an explicit list wins; with neither `client` nor `process_names`, any known proxy core counts.
+- **Config format**: `config_format` defaults to `auto`. `.yaml`/`.yml` is parsed as Clash/Mihomo; `.json` is distinguished by top-level keys; it can also be forced.
+
+## Checks
+
+| ID | Check | Failure |
+| --- | --- | --- |
+| `proxy_core` | Configured process name, client preset or a known proxy core is running | `fail` |
+| `tun_adapter` | TUN adapter exists and is Up | `fail` |
+| `default_route` | The lowest-metric `0.0.0.0/0` route goes through TUN | `fail` |
+| `firewall_block` | All three firewall profiles are enabled with default outbound Block | `fail` |
+| `guardian_rules` | Enabled allow rules meet the configured minimum | `degraded` |
+| `core_ipv6` | The runtime config disables IPv6 | `degraded` |
+| `strict_route` | The runtime config enables strict route | `degraded` |
+| `dns_hijack` | The runtime config hijacks DNS on port 53 | `degraded` |
+| `dns_servers` | Physical-adapter DNS equals the expected value | `degraded` |
+| `os_ipv6` | IPv6 binding is disabled on physical adapters | `degraded` |
+
+`overall`: any `fail` → `fail`; otherwise any `degraded` → `degraded`; all `ok` → `ok`; anything else → `unknown`.
+
+`core_ipv6`, `strict_route` and `dns_hijack` are best-effort mappings: an unsupported format, a version-specific key name or an empty config stays `unknown` and needs a manual check.
+
+## Configuration
+
+Minimal example (FlClash):
+
+```json
+{
+  "version": 1,
+  "target": "YOUR-HOSTNAME",
+  "proxy": {
+    "client": "flclash",
+    "process_names": ["FlClashCore"],
+    "tun_adapter": "auto",
+    "tun_match": [],
+    "config_format": "auto",
+    "runtime_config": "C:\\Users\\YOU\\AppData\\Roaming\\com.follow\\clash\\config.yaml"
+  },
+  "firewall": {
+    "expect_default_block": true,
+    "allow_rule_prefix": "guardian-",
+    "min_allow_rules": 1
+  },
+  "network": {
+    "expect_dns_servers": ["198.18.0.2"],
+    "expect_ipv6_disabled": true
+  },
+  "alerts": {
+    "cooldown_seconds": 120,
+    "notify_states": ["fail", "degraded"],
+    "interval_seconds": 5
+  }
+}
+```
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `version` | yes | fixed `1` |
+| `target` | yes | host name; must match `platform.node()` exactly |
+| `proxy.client` | no | a preset above; `custom` or omitted means custom |
+| `proxy.process_names` | no | overrides the preset; `[]` means any known core |
+| `proxy.tun_adapter` | no | exact adapter name or `auto` (default) |
+| `proxy.tun_match` | no | extra TUN name fragments, at most 8 |
+| `proxy.config_format` | no | `auto`, `clash`, `sing-box` or `xray` |
+| `proxy.runtime_config` | no | absolute path; `""` disables the three config checks |
+| `firewall.expect_default_block` | yes | require default outbound Block |
+| `firewall.allow_rule_prefix` | yes | allow-rule name prefix |
+| `firewall.min_allow_rules` | yes | minimum allow rules, 0–1000 |
+| `network.expect_dns_servers` | yes | expected physical-adapter DNS, up to 8 IPv4 addresses |
+| `network.expect_ipv6_disabled` | yes | require IPv6 disabled on physical adapters |
+| `alerts.cooldown_seconds` | yes | notification cooldown, 0–86400 seconds |
+| `alerts.notify_states` | yes | a combination of `fail`, `degraded`, `unknown` |
+| `alerts.interval_seconds` | yes | collection interval, 2–3600 seconds |
+| `alerts.paused` | no | pause notifications |
+
+Runtime config paths differ by client and version; always point to the file the client actually loads. See [monitor.md](skills/claude-guardian/references/monitor.md) for common locations and the fields each format can express.
+
+## UI and notifications
+
+- **Native window**: Status / Log / Settings tabs; Settings adjusts the interval, cooldown, notification states and pause.
+- **Closing the window**: with a tray, hide to tray, close, or cancel; without a tray, only close or cancel.
+- **Tray**: the shield changes colour with the overall state and shows the state on hover; transitions raise notifications with cooldown, and recovery is announced.
+- **Web fallback**: `serve` listens on a random `127.0.0.1` port with a random session token, validates `Host`, `Origin` and `Sec-Fetch-Site`, and sends a strict CSP.
+- **Notification name**: the tray runs in PowerShell and shows "Windows PowerShell" by default. Run `register-notifier` once to have notifications signed as CCGuard; `unregister-notifier` removes it.
+- Focus Assist or Windows notification settings may suppress balloons; trust the panel.
+
+## Troubleshooting
+
+| Symptom | First step |
+| --- | --- |
+| `proxy_core` fails | Run `detect`; set the core process name explicitly with `process_names` |
+| `tun_adapter` fails | Confirm the client TUN is on; run `detect`; add a `tun_match` fragment if needed |
+| `default_route` fails | Confirm the default route goes through TUN; check for a higher-priority route or VPN |
+| `core_ipv6` / `strict_route` / `dns_hijack` unknown | Check that `runtime_config` points to the live config; set `config_format` if needed |
+| `dns_servers` / `os_ipv6` degraded | A subscription update or client upgrade may have restored DNS override or IPv6; recheck |
+| No notifications | Check Windows notification settings and Focus Assist; the panel is the source of truth |
+| "monitor stopped updating" | The monitor process exited or the interval is too long; restart the panel |
+| The window will not open | tkinter is missing; use the `serve` web page |
+
+## Project layout
+
+```text
+skills/claude-guardian/
+  SKILL.md                     Claude-Guardian Skill entry
+  scripts/monitor.py           CCGuard monitor entry
+  scripts/monitor_gui.py       tkinter panel
+  assets/monitor/              panel, tray, icons and config template
+  references/monitor.md        monitor config, checks and boundaries
+tests/                         unit, regression and synthetic interaction tests
+tools/                         packaging, index and preview tools
+docs/                          decision records and supplementary docs
+```
+
+## Development and verification
 
 ```bash
-git clone https://github.com/DUNHKpcc/Claude-Guardian.git
+python -m pip install -r requirements-dev.txt
+python -m unittest discover -s tests -v
+node tests/monitor-interaction.cjs
+python -m compileall -q skills/claude-guardian/scripts
+python tools/package_skill.py --output <new.zip>
+```
+
+- CI runs on Linux, macOS, Windows and Python 3.10 Linux; `tools/ci_scope.py` distinguishes docs-only from code pushes.
+- Current version `v0.2.0`; see [CHANGELOG.md](CHANGELOG.md) for the full record and [docs/decisions.md](docs/decisions.md) for design trade-offs.
+
+## The full Claude-Guardian Skill
+
+This repository also keeps the full Claude-Guardian Skill: subscription and account pacing, fixed egress IP, local / VM / VPS routes, firewall and route optimization, failure triage, cleanup planning and more. CCGuard covers Windows local monitoring only; those deployment and operations still follow the Skill's flow and tiered authorization.
+
+- Skill entry: [skills/claude-guardian/SKILL.md](skills/claude-guardian/SKILL.md)
+- Monitor reference: [monitor.md](skills/claude-guardian/references/monitor.md)
+- Tiered authorization: [authorization-tiers.md](skills/claude-guardian/references/authorization-tiers.md)
+- Local firewall: [local-firewall-prompts.md](skills/claude-guardian/references/local-firewall-prompts.md); the macOS PF script is accepted, with its scope at [local-firewall-prompts.md#mac](skills/claude-guardian/references/local-firewall-prompts.md#mac)
+- Windows cleanup: [windows-cleanup.md](skills/claude-guardian/references/windows-cleanup.md)
+- Contact and safety boundaries: [contact-and-safety.md](skills/claude-guardian/references/contact-and-safety.md)
+- Device report template: [device-report.yml](.github/ISSUE_TEMPLATE/device-report.yml)
+
+### Install the full Skill (macOS / Linux, optional)
+
+CCGuard itself is Windows-only. If you also want the full Claude-Guardian Skill on macOS / Linux:
+
+```bash
+git clone https://github.com/SumitaRinku/CCguard.git Claude-Guardian
 (
   set -eu
   skill_root="$HOME/.codex/skills"
@@ -122,139 +304,33 @@ git clone https://github.com/DUNHKpcc/Claude-Guardian.git
 )
 ```
 
-You should end up with `~/.codex/skills/claude-guardian/SKILL.md`. The command stops on an existing target (including symlinks) to avoid nested copies or overwriting customizations; to update, inspect the diff, back up, and migrate the files you need by hand.
+You should end up with `~/.codex/skills/claude-guardian/SKILL.md`. The command stops on an existing target to avoid nested copies or overwriting customizations.
 
-**Updates:** at the start of each session the Agent runs `scripts/update_check.py check` (read-only, contacts only GitHub) to compare every file with the repository's main branch and tells you what changed recently. With your approval it backs up the current Skill outside the Skill directory, keeps the files you changed yourself, and switches to the new version; see [Skill updates](skills/claude-guardian/references/skill-update.md).
+## Ground rules
 
-On Windows, download or clone the repository, create any missing parent directories in your Codex Skill directory (usually `%USERPROFILE%\.codex\skills`), and copy the whole `claude-guardian` folder there. Confirm the result is `skills\claude-guardian\SKILL.md`; if a same-named target exists, inspect, back up and migrate by hand rather than merging or overwriting.
+- **Money and accounts are yours**: you pay, sign up, log in and do KYC or OAuth yourself.
+- **No credentials needed**: you never hand over IPs, subscription links, passwords, UUIDs or full configs.
+- **No Claude during preparation**: the client is not started, logged into or contacted.
+- **Adapt to your environment**: systems, clients and versions differ; check first, adapt, and roll back if something goes wrong.
+- **Nobody can guarantee you will not be banned**: CCGuard monitors local state only; it is not a ban-avoidance guarantee and does not replace platform compliance or acceptance.
 
-### 2. Start a conversation in Codex
-
-```text
-$claude-guardian
-I'm preparing my first Claude subscription, on a Mac. Compare local and VM first, then decide how to check.
-```
-
-The Agent asks about your stage, system and goal, without repeating questions you already answered; urgent failures and cleanup tasks go straight to their own flows.
-
-### 3. Pick a route, then check
-
-**Say what you want this time → choose local / VM / VPS → describe the network resources you have → confirm the check scope → check → approve the plan by tier**
-
-If you only want to understand the subscription or compare options, stop at the explanation stage; your device is left untouched.
-
-## Choosing a route
-
-**If the target machine already has an Agent, work directly on that machine.** OpenSSH, Tailscale, NAT traversal and remote failure drills belong to the optional [local-route extension for remote assistance](skills/claude-guardian/references/local-advanced-route.md). They are not prerequisites for the local route.
-
-| Route | For | Main content |
-| --- | --- | --- |
-| **Local** `Clash Verge` `FlClash` `macOS PF` `Windows Firewall` | Using your own Mac / Windows directly (the default suggestion) | Clash TUN and DNS, Windows firewall, PF on Mac; see [local Clash and firewall](skills/claude-guardian/references/local-firewall-prompts.md); egress IP sources in [egress sources](skills/claude-guardian/references/egress-ip-options.md) |
-| **VM** `Omarchy` `macOS` `FlClash TUN` `nftables` | A separate working environment inside a virtual machine | Guest OS preferably Omarchy (macOS on a Mac host), dedicated LAN NIC, build order and fail-closed firewall scripts in the [VM guide](skills/claude-guardian/references/vm-guidance.md); reverse tunnel and crash self-healing for a target you cannot reach directly in the [advanced route](skills/claude-guardian/references/advanced-route.md) |
-| **VPS** `Ubuntu 24.04` `Xvfb + noVNC` `Remote-SSH` `tmux` | A remote server as the dev machine (Claude Code runs on the VPS) | Consistent environment, remote desktop, firewall and route optimization in the [VPS guide](skills/claude-guardian/references/vps-guidance.md); once you buy a server and give SSH access, the Agent can deploy it under tiered authorization |
-
-The three routes are parallel choices, not an upgrade path; using a VPS as a network exit is not the same as choosing the VPS route. No proxy or server yet? You can start with an offline pre-check. For the difference between an HTTP/mixed entry and an upstream SOCKS5 exit, see [environment entry and route boundaries](docs/environment-entry-decision.md).
-
-Cleaning Claude data from an old device: macOS has a built-in host, see the [cleanup interface guide](skills/claude-guardian/references/cleanup-cli-usage.md); Windows uses a [PowerShell prompt](skills/claude-guardian/references/windows-cleanup.md) based on the official paths, Linux has its own [Linux cleanup](skills/claude-guardian/references/linux-cleanup.md). After a ban, proxy-client logs, VPN logs and IP-lookup commands in shell history are covered by [trace cleanup](skills/claude-guardian/references/trace-cleanup.md); jailbreak and reverse-proxy-distribution tools installed into Claude are removed per [illegal tools cleanup](skills/claude-guardian/references/illegal-tools-cleanup.md).
-
-For the full rules see [contact and authorization boundaries](skills/claude-guardian/references/contact-and-safety.md) and the [network evidence notes](skills/claude-guardian/references/network-and-remedies.md).
-
-## Examples
-
-| What you want | What to say |
-| --- | --- |
-| Prepare a first subscription | "I'm on Windows and preparing my first subscription. Explain what needs confirming, then decide the route." |
-| Local route, check the network | "I'm using this locally and the proxy config is imported. Help me confirm it is in effect." |
-| Compare VM and VPS | "Compare these two routes. Don't check any device or deploy anything yet." |
-| Handle an existing error | "Claude Code is erroring. Gather the existing evidence, then give the smallest fix." |
-
-<details>
-<summary><strong>For developers: command-line entry points</strong></summary>
-
-Run these from the repository root. `interview_cli.py` is recommended for the full interview; `guardian.py interview` is a simplified compatible entry.
-
-```sh
-python3 skills/claude-guardian/scripts/guardian.py --help
-python3 skills/claude-guardian/scripts/interview_cli.py --target-ref laptop-a --account-ref account-a
-```
-
-`laptop-a` and `account-a` are local aliases, not device or account identifiers. The interview prints the next question and stage assessment and does not save by default; use `--output` to save explicitly, and resume per the [interview notes](docs/interview-resume.md).
-
-The target binding for `check` must come from the actual host and user confirmation; authorization cannot be fabricated. `analyze` / `plan` process local structured facts; see samples in [`tests/fixtures/`](tests/fixtures). Synthetic data must keep its synthetic marker, and importing a report does not restore execution permission. See the [inventory notes](docs/inventory-cli.md) for the full contract.
-
-On Windows, use whichever Python 3 launcher is actually available, such as `py -3`. Platform support of each entry point follows its own help and docs; passing cross-platform core tests does not mean every host interface is available.
-
-### CLI and script index
-
-All paths are under `skills/claude-guardian/scripts/`; run commands from the repository root.
-
-| Script | Purpose | Example |
-| --- | --- | --- |
-| `interview_cli.py` | Full interview, single-question scheduling and resume | `python3 skills/claude-guardian/scripts/interview_cli.py --target-ref laptop-a --account-ref account-a` |
-| `guardian.py` | Simplified interview, local system and proxy-settings check, offline analysis and planning | `python3 skills/claude-guardian/scripts/guardian.py --help` |
-| `network_check.py` | Basic network check: route, IPv4 exit, IPv6 blocked, DNS leak, UDP, failure drill (macOS, Windows, Linux) | `python3 skills/claude-guardian/scripts/network_check.py run --target-ref laptop-a` |
-| `egress_verifier.py` | Whole-machine IPv4-only judgement | `python3 skills/claude-guardian/scripts/egress_verifier.py check --input evidence.json` |
-| `status_dashboard.py` | Offline HTML dashboard from a report; `--network` adds the network check | `python3 skills/claude-guardian/scripts/status_dashboard.py --input report.json --network net.json --output dashboard.html` |
-| `inventory_cli.py` | Capability query, gate status and static config audit | `python3 skills/claude-guardian/scripts/inventory_cli.py capabilities` |
-| `agent_remediation.py` | Selects repair actions from a report | `python3 skills/claude-guardian/scripts/agent_remediation.py --help` |
-| `repair_cli.py` | Exact-file precheck, plan, diff and execution; writes the `rules-prepend` extension of Clash Verge Rev 2.5.8 on Mac | `python3 skills/claude-guardian/scripts/repair_cli.py --help` |
-| `recovery_cli.py` | Receipt-based check and exact-file restore (POSIX) | `python3 skills/claude-guardian/scripts/recovery_cli.py --help` |
-| `cleanup_cli.py`, `native_cleanup_mac.py` | Claude local-data cleanup; built-in host on macOS | `python3 skills/claude-guardian/scripts/native_cleanup_mac.py --help` |
-| `serve_webrtc.py` | Temporary loopback WebRTC test page | `python3 skills/claude-guardian/scripts/serve_webrtc.py --help` |
-
-Output files (`--output`, `--evidence-output`, dashboard HTML) are always new files and never overwrite. Plans, receipts and restores for `repair_cli.py` and `recovery_cli.py` are in [offline recovery](docs/offline-recovery.md); the environment entry declaration is in [environment entry](docs/environment-entry-decision.md).
-
-</details>
+See [authorization tiers](skills/claude-guardian/references/authorization-tiers.md) and [contact and authorization boundaries](skills/claude-guardian/references/contact-and-safety.md) for the full rules.
 
 ## Documentation
 
 | Start here | Contents |
 | --- | --- |
-| [**Wiki**](https://github.com/DUNHKpcc/Claude-Guardian/wiki) | User-facing tutorials (generated from the repository; edit the repository, see `tools/export_wiki.py`) |
-| [Skill entry](skills/claude-guardian/SKILL.md) | Conversation order, tool entries and on-demand loading rules |
-| [Local, VM and VPS](skills/claude-guardian/references/routes-and-platforms.md) | Route choice, target boundaries and lifecycle |
-| [Accounts and payment prep](skills/claude-guardian/references/accounts-and-payments.md) | Subscription stage, channel prerequisites and payment handoff |
-| [Account signup and pacing](skills/claude-guardian/references/account-onboarding.md) | Email, Free→Pro→Max intervals, quota and education email |
-| [Mobile anti-ban notes](skills/claude-guardian/references/mobile-guidance.md) | iOS / Android checklist, removing the SIM on Android |
-| [Ban appeal](skills/claude-guardian/references/ban-appeal.md) | Appeal template, 2–7 day reply window, use after reinstatement |
-| [Fixed egress IP sources](skills/claude-guardian/references/egress-ip-options.md) | Airport, self-built proxy, shared residential; recommendations and the short self-build prompt |
-| [Local Clash and firewall](skills/claude-guardian/references/local-firewall-prompts.md) | Windows firewall (prompt-guided), PF script on Mac |
-| [VM guide](skills/claude-guardian/references/vm-guidance.md) | Guest OS, dedicated LAN NIC, build order, fail-closed firewall |
-| [VPS guide](skills/claude-guardian/references/vps-guidance.md) | Dev machine, consistent environment, remote desktop, firewall |
-| [Route optimization](skills/claude-guardian/references/line-optimization.md) | Item-by-item diagnosis and tuning, change cards and rollback |
-| [Network and remedies](skills/claude-guardian/references/network-and-remedies.md) | Interpreting evidence for proxy, DNS, IPv4/IPv6, UDP/WebRTC |
-| [Environment dashboard](docs/environment-dashboard.md) | Build an offline page from an existing report, no new check |
-| [Rules extension candidate](docs/rules-extension-plan.md) | Private diff, input binding and current execution limits |
-| [Incidents and cleanup](skills/claude-guardian/references/incidents-and-integrations.md) | Failures, retained scope, appeals and integration boundaries |
-| [Source library](skills/claude-guardian/references/source-library.md) | Bundled originals, sections and sources by topic |
+| [Monitor reference](skills/claude-guardian/references/monitor.md) | Configuration, client presets, checks, notifications and boundaries |
+| [Script index](skills/claude-guardian/references/scripts-index.md) | Monitor and Claude-Guardian script entries |
+| [Decision log](docs/decisions.md) | ADRs and implementation trade-offs |
+| [Changelog](CHANGELOG.md) | What changed per version, verification and rollback |
+| [Claude-Guardian upstream](https://github.com/DUNHKpcc/Claude-Guardian) | Full Skill, source library and route docs |
+| [Releases](https://github.com/SumitaRinku/CCguard/releases) | Packages and checksums |
 
-Source originals keep their own attribution and license, and related answers cite them.
+## Feedback
 
-## Development and verification
+Report problems through [Issues](https://github.com/SumitaRinku/CCguard/issues). Include the Windows version, proxy client and version, reproduction steps and expected result; keep accounts, credentials, subscription links and full configs out of it. A device report can follow [device-report.yml](.github/ISSUE_TEMPLATE/device-report.yml).
 
-```sh
-python3 -m unittest discover -s tests -v
-python3 -m compileall -q skills/claude-guardian/scripts
-python3 tools/package_skill.py --help
-```
+## License
 
-When packaging, use `--output` for a new ZIP path in your own temporary directory; tests use synthetic data only. CI runs unit, regression and deterministic packaging checks on Linux, macOS and Windows. What changed is in the [CHANGELOG](CHANGELOG.md); why is in the [decision log](docs/decisions.md).
-
-**Real-device verification and feedback:** the author verified these tutorials and scripts on their own Mac, Windows, VM and VPS, and the Clash Verge write and rollback and the whole-machine egress ruling on Mac went through item-by-item real-device acceptance (see [ADR-039](docs/decisions.md)). Tell us which item you used, how it went and what needed adjusting through the [device report](https://github.com/DUNHKpcc/Claude-Guardian/issues/new?template=device-report.yml).
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=DUNHKpcc/Claude-Guardian&type=Date)](https://www.star-history.com/?repos=DUNHKpcc%2FClaude-Guardian&type=date)
-
-## Community channels
-
-- Telegram channel: [https://t.me/+q4D4_Qf_FIs5NDk1](https://t.me/+q4D4_Qf_FIs5NDk1)
-- QQ: 1048450370
-
-Swap experience and share usage in the channel; for problem reports and suggestions use Issues so they are on record.
-
-## Feedback and license
-
-Report problems through [Issues](https://github.com/DUNHKpcc/Claude-Guardian/issues), or submit docs, synthetic samples and regression tests. Include your system, version, reproduction steps and expected result, and keep accounts, credentials, subscription links and full proxy configs out of it.
-
-Code is licensed **[GPL-3.0-only](LICENSE)**. Source originals keep their existing attribution and license notices.
+Code is licensed **GPL-3.0-only**, see [LICENSE](LICENSE). Source originals keep their existing attribution and license notices. CCGuard is not affiliated with Anthropic and makes no ban-avoidance guarantee.
