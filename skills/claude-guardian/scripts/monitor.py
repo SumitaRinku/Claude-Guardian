@@ -26,9 +26,77 @@ STATES = ('ok', 'degraded', 'fail', 'unknown')
 ALERT_STATES = {'fail', 'degraded', 'unknown'}
 CHECK_IDS = ('proxy_core', 'tun_adapter', 'default_route', 'firewall_block', 'guardian_rules',
              'core_ipv6', 'strict_route', 'dns_hijack', 'dns_servers', 'os_ipv6')
-VIRTUAL = re.compile(r'virtual|meta tunnel|zerotier|hyper-v|vmware|bluetooth|loopback|tap-|wintun|wireguard', re.I)
-NAME = re.compile(r'[A-Za-z0-9_.-]{1,64}\Z')
+VIRTUAL = re.compile(r'virtual|meta tunnel|zerotier|hyper-v|vmware|bluetooth|loopback|tap-|wintun|wireguard|'
+                     r'sing-tun|sing-box|mihomo|clash|flclash|hiddify|nekoray|nekobox|v2rayn|tun2socks', re.I)
+# Process and adapter names may contain spaces and punctuation (for example "Clash for Windows").
+# They are only compared in Python and never interpolated into PowerShell.
+NAME = re.compile(r'[A-Za-z0-9_. +()-]{1,64}\Z')
 PREFIX = re.compile(r'[A-Za-z0-9_.-]{1,32}\Z')
+
+# Adapter name/description fragments that identify a TUN interface across clients and versions.
+TUN_HINTS = ('meta tunnel', 'mihomo', 'clash', 'flclash', 'sing-tun', 'sing-box', 'hiddify',
+             'nekoray', 'nekobox', 'v2rayn', 'tun2socks', 'wintun', 'wireguard')
+
+# Known Windows proxy clients. A preset fills process names, TUN hints and the config format;
+# every field can still be overridden from the private monitor.json.
+CLIENT_PRESETS = {
+    'flclash': {
+        'label': 'FlClash',
+        'process_names': ('FlClashCore', 'FlClash'),
+        'tun_patterns': ('flclash', 'meta tunnel'),
+        'config_format': 'clash',
+    },
+    'clash-verge-rev': {
+        'label': 'Clash Verge Rev',
+        'process_names': ('verge-mihomo', 'verge-mihomo-alpha', 'clash-verge', 'clash-verge-service'),
+        'tun_patterns': ('clash', 'mihomo', 'meta'),
+        'config_format': 'clash',
+    },
+    'clash-nyanpasu': {
+        'label': 'Clash Nyanpasu',
+        'process_names': ('clash-nyanpasu', 'mihomo', 'clash-meta'),
+        'tun_patterns': ('nyanpasu', 'mihomo', 'meta'),
+        'config_format': 'clash',
+    },
+    'clash-for-windows': {
+        'label': 'Clash for Windows',
+        'process_names': ('Clash for Windows', 'clash-win64'),
+        'tun_patterns': ('clash',),
+        'config_format': 'clash',
+    },
+    'mihomo': {
+        'label': 'Mihomo / Clash.Meta',
+        'process_names': ('mihomo', 'clash-meta'),
+        'tun_patterns': ('mihomo', 'meta tunnel', 'clash'),
+        'config_format': 'clash',
+    },
+    'sing-box': {
+        'label': 'sing-box',
+        'process_names': ('sing-box',),
+        'tun_patterns': ('sing-box', 'sing-tun'),
+        'config_format': 'sing-box',
+    },
+    'hiddify': {
+        'label': 'Hiddify',
+        'process_names': ('Hiddify', 'HiddifyCli', 'hiddify-core', 'sing-box'),
+        'tun_patterns': ('hiddify', 'sing-tun'),
+        'config_format': 'sing-box',
+    },
+    'v2rayn': {
+        'label': 'v2rayN',
+        'process_names': ('v2rayN', 'xray', 'v2ray'),
+        'tun_patterns': ('v2rayn', 'tun2socks'),
+        'config_format': 'xray',
+    },
+    'nekoray': {
+        'label': 'NekoRay / NekoBox',
+        'process_names': ('nekoray', 'nekobox', 'sing-box', 'xray'),
+        'tun_patterns': ('nekoray', 'nekobox', 'sing-tun'),
+        'config_format': 'auto',
+    },
+}
+
+KNOWN_CORES = tuple(sorted({name for preset in CLIENT_PRESETS.values() for name in preset['process_names']}))
 
 PROBE_SCRIPT = r'''
 $ErrorActionPreference = 'SilentlyContinue'
@@ -72,16 +140,29 @@ def validate_config(cfg):
         raise MonitorError('配置与当前设备不匹配，请让 Agent 核对目标设备。')
     proxy, firewall = cfg.get('proxy'), cfg.get('firewall')
     network, alerts = cfg.get('network'), cfg.get('alerts')
-    if not isinstance(proxy, dict) or set(proxy) != {'process_names', 'tun_adapter', 'runtime_config'}:
+    allowed_proxy = {'process_names', 'tun_adapter', 'runtime_config', 'client', 'config_format', 'tun_match'}
+    if not isinstance(proxy, dict) or not set(proxy) <= allowed_proxy:
         raise MonitorError('proxy 段格式不正确。')
-    names = proxy['process_names']
-    if not isinstance(names, list) or not names or any(not isinstance(n, str) or not NAME.fullmatch(n) for n in names):
+    client = proxy.get('client', '')
+    if not isinstance(client, str) or (client not in ('', 'custom') and client not in CLIENT_PRESETS):
+        raise MonitorError('proxy.client 不是已知的客户端预设。')
+    names = proxy.get('process_names')
+    if names is not None and (not isinstance(names, list) or len(names) > 16
+                              or any(not isinstance(n, str) or not NAME.fullmatch(n) for n in names)):
         raise MonitorError('请填写需要监测的代理核心进程名。')
-    if not _text(proxy['tun_adapter'], 64):
-        raise MonitorError('请填写 TUN 网卡名称。')
-    runtime = proxy['runtime_config']
-    if not isinstance(runtime, str) or not Path(runtime).is_absolute() or not _text(runtime, 260):
-        raise MonitorError('代理运行配置必须是绝对路径。')
+    adapter = proxy.get('tun_adapter', '')
+    if (not isinstance(adapter, str)
+            or (adapter != '' and adapter.lower() != 'auto' and not NAME.fullmatch(adapter))):
+        raise MonitorError('TUN 网卡名称格式不正确；可填 auto 交由自动识别。')
+    runtime = proxy.get('runtime_config', '')
+    if not isinstance(runtime, str) or (runtime and (not Path(runtime).is_absolute() or not _text(runtime, 260))):
+        raise MonitorError('代理运行配置必须是绝对路径，或留空关闭配置项检查。')
+    if proxy.get('config_format', 'auto') not in ('auto', 'clash', 'sing-box', 'xray'):
+        raise MonitorError('config_format 只能是 auto、clash、sing-box 或 xray。')
+    matches = proxy.get('tun_match', [])
+    if (not isinstance(matches, list) or len(matches) > 8
+            or any(not isinstance(m, str) or not NAME.fullmatch(m) for m in matches)):
+        raise MonitorError('tun_match 必须是最多 8 个网卡名称片段。')
     if not isinstance(firewall, dict) or set(firewall) != {'expect_default_block', 'allow_rule_prefix', 'min_allow_rules'}:
         raise MonitorError('firewall 段格式不正确。')
     if type(firewall['expect_default_block']) is not bool:
@@ -117,13 +198,66 @@ def validate_config(cfg):
     return cfg
 
 
-def read_core_config(path):
-    """Whitelisted scalar keys only; never returns proxies, groups or credentials."""
-    result = {'ipv6': None, 'tun_enable': None, 'strict_route': None, 'enhanced_mode': None, 'dns_hijack': None}
+def _empty_core():
+    return {'ipv6': None, 'tun_enable': None, 'strict_route': None, 'enhanced_mode': None, 'dns_hijack': None}
+
+
+def detect_core_format(path, text):
+    """Best-effort format detection: YAML stays Clash/Mihomo, JSON is sniffed by its keys."""
+    suffix = Path(path).suffix.lower()
+    if suffix in ('.yaml', '.yml'):
+        return 'clash'
+    stripped = text.lstrip('\ufeff \t\r\n')
+    if suffix == '.json' or stripped.startswith('{'):
+        try:
+            doc = json.loads(text)
+        except ValueError:
+            return 'unknown'
+        if isinstance(doc, dict):
+            if 'routing' in doc:
+                return 'xray'
+            if 'route' in doc or 'tun' in doc:
+                return 'sing-box'
+            inbounds = doc.get('inbounds')
+            if isinstance(inbounds, list) and any(isinstance(item, dict) and 'type' in item for item in inbounds):
+                return 'sing-box'
+            if 'inbounds' in doc and 'outbounds' in doc:
+                return 'xray'
+    return 'unknown' if stripped.startswith('{') else 'clash'
+
+
+def read_core_config(path, config_format='auto'):
+    """Whitelisted scalar keys only; never returns proxies, groups or credentials.
+
+    Clash/Mihomo YAML is parsed directly. sing-box and Xray JSON are mapped best-effort to the
+    same five scalars; anything the format does not express stays None so the panel reports
+    unknown instead of guessing.
+    """
+    result = _empty_core()
+    if not path:
+        return result
     try:
         text = Path(path).read_text(encoding='utf-8-sig', errors='replace')
     except OSError:
         return result
+    fmt = config_format
+    if fmt == 'auto':
+        fmt = detect_core_format(path, text)
+    if fmt == 'clash':
+        return _read_clash_config(text)
+    if fmt in ('sing-box', 'xray'):
+        try:
+            doc = json.loads(text)
+        except ValueError:
+            return result
+        if not isinstance(doc, dict):
+            return result
+        return _read_singbox_config(doc) if fmt == 'sing-box' else _read_xray_config(doc)
+    return result
+
+
+def _read_clash_config(text):
+    result = _empty_core()
     section = None
     hijack = []
     in_hijack = False
@@ -172,6 +306,103 @@ def read_core_config(path):
     return result
 
 
+def _singbox_tun(doc):
+    tun = doc.get('tun') if isinstance(doc.get('tun'), dict) else None
+    if tun is not None:
+        return tun
+    # sing-box 1.11+ configures TUN as an inbound with type "tun".
+    for inbound in doc.get('inbounds') or []:
+        if isinstance(inbound, dict) and str(inbound.get('type', '')).lower() == 'tun':
+            return inbound
+    return None
+
+
+def _read_singbox_config(doc):
+    result = _empty_core()
+    tun = _singbox_tun(doc)
+    if isinstance(tun, dict):
+        if 'enable' in tun:
+            result['tun_enable'] = _flag(tun['enable'])
+        strict = tun.get('strict-route', tun.get('strict_route'))
+        if strict is not None:
+            result['strict_route'] = _flag(strict)
+        inet6 = tun.get('inet6_address', tun.get('inet6-address'))
+        inet4 = tun.get('inet4_address', tun.get('inet4-address'))
+        addresses = tun.get('address')
+        if inet6:
+            result['ipv6'] = True
+        elif inet4:
+            result['ipv6'] = False
+        elif isinstance(addresses, (list, tuple)) and addresses:
+            result['ipv6'] = any(':' in str(item) for item in addresses)
+        elif isinstance(addresses, str) and addresses:
+            result['ipv6'] = ':' in addresses
+    if result['ipv6'] is None and isinstance(doc.get('ipv6'), bool):
+        result['ipv6'] = doc['ipv6']
+    route = doc.get('route')
+    if result['ipv6'] is None and isinstance(doc.get('dns'), dict):
+        strategy = str(doc['dns'].get('strategy', '')).strip().lower()
+        if strategy == 'ipv4_only':
+            result['ipv6'] = False
+        elif strategy in ('ipv6_only', 'prefer_ipv6'):
+            result['ipv6'] = True
+    if isinstance(route, dict) and isinstance(route.get('rules'), list):
+        hijack = False
+        for rule in route['rules']:
+            if not isinstance(rule, dict):
+                continue
+            action = str(rule.get('action', '')).strip().lower()
+            protocol = rule.get('protocol')
+            protocols = [protocol] if isinstance(protocol, str) else protocol
+            if action in ('hijack-dns', 'hijack_dns') or (
+                    isinstance(protocols, list) and 'dns' in [str(item).lower() for item in protocols]):
+                hijack = True
+                break
+        result['dns_hijack'] = hijack
+    return result
+
+
+def _read_xray_config(doc):
+    result = _empty_core()
+    dns = doc.get('dns') if isinstance(doc.get('dns'), dict) else {}
+    routing = doc.get('routing') if isinstance(doc.get('routing'), dict) else {}
+    strategy = dns.get('queryStrategy', dns.get('query_strategy'))
+    if strategy is None:
+        strategy = routing.get('domainStrategy', routing.get('domain_strategy'))
+    if isinstance(strategy, str):
+        value = strategy.strip().lower()
+        if value == 'useipv4':
+            result['ipv6'] = False
+        elif value in ('useipv6', 'useip', 'asis'):
+            result['ipv6'] = True
+    found = False
+    hijack = False
+    for inbound in doc.get('inbounds') or []:
+        if not isinstance(inbound, dict):
+            continue
+        sniffing = inbound.get('sniffing')
+        if not isinstance(sniffing, dict) or not sniffing.get('enabled'):
+            continue
+        found = True
+        override = sniffing.get('destOverride', sniffing.get('dest_override')) or []
+        if isinstance(override, str):
+            override = [override]
+        if 'dns' in [str(item).lower() for item in override]:
+            hijack = True
+    for rule in routing.get('rules') or []:
+        if not isinstance(rule, dict):
+            continue
+        protocol = rule.get('protocol')
+        protocols = [protocol] if isinstance(protocol, str) else protocol or []
+        if 'dns' in [str(item).lower() for item in protocols]:
+            found = True
+            hijack = True
+            break
+    if found:
+        result['dns_hijack'] = hijack
+    return result
+
+
 def _flag(value):
     if value is True:
         return True
@@ -188,9 +419,59 @@ def _blocked(value):
     return str(value).strip().lower() in ('block', '4')
 
 
-def _physical(adapters):
+def proxy_profile(cfg):
+    """Resolve optional client presets and overrides into the values the checks use."""
+    proxy = cfg.get('proxy') if isinstance(cfg.get('proxy'), dict) else {}
+    client = proxy.get('client', '') if isinstance(proxy.get('client', ''), str) else ''
+    preset = CLIENT_PRESETS.get(client, {})
+    names = proxy.get('process_names')
+    if names is None:
+        names = list(preset.get('process_names', ()))
+    patterns = [item.casefold() for item in preset.get('tun_patterns', ())]
+    for item in proxy.get('tun_match', []) or []:
+        if isinstance(item, str) and item.casefold() not in patterns:
+            patterns.append(item.casefold())
+    fmt = proxy.get('config_format', 'auto')
+    if fmt == 'auto':
+        fmt = preset.get('config_format', 'auto')
+    return {
+        'client': client or 'custom',
+        'process_names': list(names),
+        'tun_patterns': patterns,
+        'config_format': fmt,
+        'tun_adapter': proxy.get('tun_adapter', '') or '',
+        'runtime_config': proxy.get('runtime_config', '') or '',
+    }
+
+
+def find_tun_adapters(profile, adapters):
+    """Configured adapter name wins; otherwise match TUN-ish name/description hints.
+
+    Matching is case-insensitive and substring-based so adapter renames between client
+    versions do not break detection.
+    """
+    configured = str(profile.get('tun_adapter') or '').strip().casefold()
+    hints = list(TUN_HINTS) + list(profile.get('tun_patterns') or [])
+    exact, hinted = [], []
+    for adapter in adapters or []:
+        if not isinstance(adapter, dict):
+            continue
+        name = _name(adapter)
+        description = str(adapter.get('InterfaceDescription') or adapter.get('description') or '')
+        haystack = (name + ' ' + description).casefold()
+        if configured and configured != 'auto' and (
+                name.casefold() == configured or description.casefold() == configured):
+            exact.append(adapter)
+        elif any(hint in haystack for hint in hints):
+            hinted.append(adapter)
+    return exact + hinted
+
+
+def _physical(adapters, tuns=()):
+    tun_names = {_name(adapter).casefold() for adapter in tuns or []}
     return [a for a in adapters
-            if isinstance(a, dict) and not VIRTUAL.search(str(a.get('InterfaceDescription') or a.get('description') or ''))
+            if isinstance(a, dict) and _name(a).casefold() not in tun_names
+            and not VIRTUAL.search(str(a.get('InterfaceDescription') or a.get('description') or ''))
             and str(a.get('Status') or a.get('status') or '').lower() == 'up']
 
 
@@ -222,24 +503,25 @@ def _norm(raw):
 
 def evaluate(cfg, raw, core):
     data = _norm(raw)
+    profile = proxy_profile(cfg)
     checks = []
 
     def add(check_id, state, code):
         checks.append({'id': check_id, 'state': state, 'code': code})
 
-    names = {str(n).casefold() for n in (data['processes'] or [])}
-    wanted = {n.casefold().removesuffix('.exe') for n in cfg['proxy']['process_names']}
+    running = {str(n).casefold().removesuffix('.exe') for n in (data['processes'] or [])}
+    wanted = {str(n).casefold().removesuffix('.exe')
+              for n in (profile['process_names'] or KNOWN_CORES)}
     if data['processes'] is None:
         add('proxy_core', 'unknown', 'PROCESS_QUERY_UNAVAILABLE')
-    elif any(wanted_name in {n.removesuffix('.exe') for n in names} for wanted_name in wanted):
+    elif wanted & running:
         add('proxy_core', 'ok', 'PROXY_CORE_RUNNING')
     else:
         add('proxy_core', 'fail', 'PROXY_CORE_MISSING')
 
-    tun_name = cfg['proxy']['tun_adapter']
     adapters = data['adapters'] or []
-    tun = next((a for a in adapters if _name(a).casefold() == tun_name.casefold()
-                or str(a.get('InterfaceDescription') or '').casefold() == 'meta tunnel'), None)
+    tuns = find_tun_adapters(profile, adapters)
+    tun = tuns[0] if tuns else None
     if data['adapters'] is None:
         add('tun_adapter', 'unknown', 'ADAPTER_QUERY_UNAVAILABLE')
     elif tun is None:
@@ -261,7 +543,10 @@ def evaluate(cfg, raw, core):
             except (TypeError, ValueError):
                 return 999999
         best = min(routes, key=weight)
-        tun_aliases = {tun_name.casefold()} | ({_name(tun).casefold()} if tun is not None else set())
+        tun_aliases = {_name(adapter).casefold() for adapter in tuns}
+        configured = str(profile.get('tun_adapter') or '').strip().casefold()
+        if configured and configured != 'auto':
+            tun_aliases.add(configured)
         if str(best.get('InterfaceAlias') or '').casefold() in tun_aliases:
             add('default_route', 'ok', 'DEFAULT_ROUTE_VIA_TUN')
         else:
@@ -310,7 +595,7 @@ def evaluate(cfg, raw, core):
     else:
         add('dns_hijack', 'degraded', 'DNS_HIJACK_MISSING')
 
-    physical = _physical(adapters)
+    physical = _physical(adapters, tuns)
     expected = {str(item) for item in cfg['network']['expect_dns_servers']}
     if not expected:
         add('dns_servers', 'ok', 'DNS_SERVERS_NOT_CHECKED')
@@ -399,15 +684,42 @@ def states_of(state):
 
 def state_of(cfg, providers=None):
     providers = providers or WindowsProbes()
+    profile = proxy_profile(cfg)
     raw = providers.collect()
-    core = read_core_config(cfg['proxy']['runtime_config'])
+    core = read_core_config(profile['runtime_config'], profile['config_format'])
     checks = evaluate(cfg, raw, core)
     return {'schema_version': SCHEMA, 'target_ref': cfg['target'], 'checked_at': int(time.time()),
             'interval_seconds': cfg['alerts']['interval_seconds'],
             'cooldown_seconds': cfg['alerts']['cooldown_seconds'],
             'notify_states': list(cfg['alerts']['notify_states']),
             'paused': bool(cfg['alerts'].get('paused', False)),
+            'client': profile['client'],
             'overall': overall(checks), 'checks': checks}
+
+
+def detect(providers=None):
+    """Candidate proxy cores and TUN adapters for the current host; no configuration needed."""
+    providers = providers or WindowsProbes()
+    raw = providers.collect()
+    if not isinstance(raw, dict):
+        raise MonitorError('无法读取本机状态：监测仅支持 Windows，或需要以普通用户运行。')
+    processes = [str(item) for item in raw.get('processes') or []]
+    known = {name.casefold().removesuffix('.exe') for name in KNOWN_CORES}
+    cores = sorted({item for item in processes
+                    if item.casefold().removesuffix('.exe') in known}, key=str.casefold)
+    adapters = raw.get('adapters') or []
+    tuns = find_tun_adapters({'tun_adapter': '', 'tun_patterns': []}, adapters)
+    running = {item.casefold().removesuffix('.exe') for item in cores}
+    guesses = [key for key, preset in CLIENT_PRESETS.items()
+               if {name.casefold().removesuffix('.exe') for name in preset['process_names']} & running]
+    return {
+        'platform': platform.system(),
+        'cores': cores,
+        'tun_adapters': [{'name': _name(adapter),
+                          'description': str(adapter.get('InterfaceDescription') or ''),
+                          'status': str(adapter.get('Status') or '')} for adapter in tuns],
+        'client_guesses': guesses,
+    }
 
 
 def collect_state(cfg, providers=None):
@@ -682,7 +994,7 @@ def main(argv=None):
         if hasattr(stream, 'reconfigure'):
             stream.reconfigure(encoding='utf-8')
     parser = argparse.ArgumentParser(description='Claude-Guardian 本机实时监测（只读、不联网）')
-    parser.add_argument('action', choices=['check', 'serve', 'gui', 'desktop',
+    parser.add_argument('action', choices=['check', 'detect', 'serve', 'gui', 'desktop',
                                            'register-notifier', 'unregister-notifier', 'notifier-status'])
     parser.add_argument('--config', type=Path)
     parser.add_argument('--tray', action='store_true')
@@ -709,6 +1021,9 @@ def main(argv=None):
                 print(json.dumps({'registered': False}))
             else:
                 print(json.dumps(notifier_status(), ensure_ascii=False))
+            return 0
+        if args.action == 'detect':
+            print(json.dumps(detect(), ensure_ascii=False))
             return 0
         if args.config is None:
             raise MonitorError('请用 --config 指定监测配置。')

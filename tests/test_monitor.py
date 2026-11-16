@@ -310,6 +310,224 @@ class Evaluation(unittest.TestCase):
         self.assertEqual(self.states(raw)['dns_servers'], 'ok')
 
 
+class MultiClientConfig(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def cfg(self, **proxy):
+        cfg = config(self.dir)
+        cfg['proxy'] = dict(cfg['proxy'], **proxy)
+        return cfg
+
+    def states(self, cfg, raw):
+        return {check['id']: check['state'] for check in m.evaluate(cfg, raw, CORE_OK)}
+
+    def test_preset_fills_process_names_tun_hints_and_format(self):
+        cfg = config(self.dir)
+        cfg['proxy'] = {'client': 'clash-verge-rev', 'runtime_config': str(self.dir / 'config.yaml')}
+        cfg = m.validate_config(cfg)
+        profile = m.proxy_profile(cfg)
+        self.assertEqual(profile['client'], 'clash-verge-rev')
+        self.assertIn('verge-mihomo', profile['process_names'])
+        self.assertEqual(profile['config_format'], 'clash')
+        self.assertIn('mihomo', profile['tun_patterns'])
+
+    def test_explicit_values_override_preset(self):
+        cfg = m.validate_config(self.cfg(client='flclash', process_names=['custom-core'],
+                                         tun_adapter='Custom TUN', config_format='xray',
+                                         tun_match=['my-tun']))
+        profile = m.proxy_profile(cfg)
+        self.assertEqual(profile['process_names'], ['custom-core'])
+        self.assertEqual(profile['config_format'], 'xray')
+        self.assertEqual(profile['tun_adapter'], 'Custom TUN')
+        self.assertIn('my-tun', profile['tun_patterns'])
+
+    def test_unknown_preset_format_and_bad_match_are_rejected(self):
+        for change in ({'client': 'unknown'}, {'config_format': 'yaml2'}, {'tun_match': 'tun'}):
+            cfg = self.cfg(**change)
+            with self.assertRaises(m.MonitorError):
+                m.load_config(write_config(self.dir, cfg))
+
+    def test_empty_runtime_config_skips_core_checks(self):
+        cfg = m.validate_config(self.cfg(runtime_config=''))
+        state = m.state_of(cfg, FakeProviders(raw_state()))
+        states = {check['id']: check['state'] for check in state['checks']}
+        self.assertEqual(states['core_ipv6'], 'unknown')
+        self.assertEqual(states['strict_route'], 'unknown')
+        self.assertEqual(states['dns_hijack'], 'unknown')
+        self.assertEqual(state['client'], 'custom')
+
+    def test_empty_process_names_fall_back_to_known_cores(self):
+        cfg = m.validate_config(self.cfg(client='custom', process_names=[]))
+        self.assertEqual(self.states(cfg, raw_state(processes=['xray']))['proxy_core'], 'ok')
+        self.assertEqual(self.states(cfg, raw_state(processes=['explorer']))['proxy_core'], 'fail')
+
+
+class TunDetection(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def states(self, cfg, raw):
+        return {check['id']: check['state'] for check in m.evaluate(cfg, raw, CORE_OK)}
+
+    def test_auto_detects_singbox_tun_by_description(self):
+        cfg = config(self.dir)
+        cfg['proxy'] = {'client': 'sing-box', 'runtime_config': str(self.dir / 'config.json')}
+        cfg = m.validate_config(cfg)
+        raw = raw_state(processes=['sing-box'], adapters=[
+            {'Name': 'sing-box', 'InterfaceDescription': 'sing-tun', 'Status': 'Up'},
+            {'Name': 'Ethernet', 'InterfaceDescription': 'Realtek', 'Status': 'Up'}],
+            routes=[{'InterfaceAlias': 'sing-box', 'RouteMetric': 0, 'InterfaceMetric': 0}])
+        states = self.states(cfg, raw)
+        self.assertEqual(states['proxy_core'], 'ok')
+        self.assertEqual(states['tun_adapter'], 'ok')
+        self.assertEqual(states['default_route'], 'ok')
+
+    def test_exact_configured_adapter_takes_precedence(self):
+        cfg = config(self.dir)
+        raw = raw_state(processes=['FlClashCore'], adapters=[
+            {'Name': 'FlClash', 'InterfaceDescription': 'Meta Tunnel', 'Status': 'Disconnected'},
+            {'Name': 'Mihomo', 'InterfaceDescription': 'Mihomo', 'Status': 'Up'},
+            {'Name': 'Ethernet', 'InterfaceDescription': 'Realtek', 'Status': 'Up'}],
+            routes=[{'InterfaceAlias': 'Mihomo', 'RouteMetric': 0, 'InterfaceMetric': 0}])
+        states = self.states(cfg, raw)
+        self.assertEqual(states['tun_adapter'], 'fail')
+        self.assertEqual(states['default_route'], 'ok')
+
+    def test_detected_tun_is_not_treated_as_physical_for_dns_and_ipv6(self):
+        cfg = config(self.dir)
+        cfg['proxy']['tun_adapter'] = 'auto'
+        raw = raw_state(processes=['FlClashCore'], adapters=[
+            {'Name': 'Mihomo', 'InterfaceDescription': 'Mihomo', 'Status': 'Up'},
+            {'Name': 'Ethernet', 'InterfaceDescription': 'Realtek', 'Status': 'Up'}],
+            routes=[{'InterfaceAlias': 'Mihomo', 'RouteMetric': 0, 'InterfaceMetric': 0}],
+            dns=[{'InterfaceAlias': 'Ethernet', 'ServerAddresses': ['198.18.0.2']},
+                 {'InterfaceAlias': 'Mihomo', 'ServerAddresses': ['1.1.1.1']}],
+            ipv6=[{'Name': 'Ethernet', 'Enabled': False},
+                  {'Name': 'Mihomo', 'Enabled': True}])
+        states = self.states(cfg, raw)
+        self.assertEqual(states['dns_servers'], 'ok')
+        self.assertEqual(states['os_ipv6'], 'ok')
+
+    def test_extra_tun_match_is_honoured(self):
+        cfg = config(self.dir)
+        cfg['proxy']['tun_adapter'] = 'auto'
+        cfg['proxy']['tun_match'] = ['my custom tun']
+        raw = raw_state(adapters=[
+            {'Name': 'Adapter 7', 'InterfaceDescription': 'My Custom Tun Device', 'Status': 'Up'},
+            {'Name': 'Ethernet', 'InterfaceDescription': 'Realtek', 'Status': 'Up'}],
+            routes=[{'InterfaceAlias': 'Adapter 7', 'RouteMetric': 0, 'InterfaceMetric': 0}])
+        states = self.states(cfg, raw)
+        self.assertEqual(states['tun_adapter'], 'ok')
+        self.assertEqual(states['default_route'], 'ok')
+
+
+class JsonCoreConfig(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def write(self, name, doc):
+        path = self.dir / name
+        path.write_text(json.dumps(doc), encoding='utf-8')
+        return path
+
+    def test_singbox_tun_inbound_with_hijack_dns(self):
+        path = self.write('config.json', {
+            'log': {'level': 'info'},
+            'inbounds': [{'type': 'tun', 'tag': 'tun-in', 'inet4_address': '172.19.0.1/30',
+                          'strict_route': True, 'auto_route': True}],
+            'outbounds': [{'type': 'direct', 'tag': 'direct'}],
+            'route': {'rules': [{'action': 'hijack-dns'}]},
+            'dns': {'strategy': 'ipv4_only'},
+        })
+        self.assertEqual(m.detect_core_format(path, path.read_text(encoding='utf-8')), 'sing-box')
+        result = m.read_core_config(path)
+        self.assertIs(result['ipv6'], False)
+        self.assertIs(result['strict_route'], True)
+        self.assertIs(result['dns_hijack'], True)
+        self.assertIsNone(result['tun_enable'])
+
+    def test_singbox_1_11_address_list_is_understood(self):
+        v4 = self.write('v4.json', {'inbounds': [{'type': 'tun', 'address': ['172.19.0.1/30']}]})
+        v6 = self.write('v6.json', {'inbounds': [{'type': 'tun',
+                                                  'address': ['172.19.0.1/30', 'fdfe:dcba:9876::1/126']}]})
+        self.assertIs(m.read_core_config(v4)['ipv6'], False)
+        self.assertIs(m.read_core_config(v6)['ipv6'], True)
+
+    def test_singbox_top_level_tun_with_inet6_is_ipv6_on(self):
+        path = self.write('config.json', {
+            'tun': {'enable': True, 'inet6_address': 'fdfe:dcba:9876::1/126', 'strict-route': False},
+            'route': {},
+        })
+        result = m.read_core_config(path)
+        self.assertIs(result['tun_enable'], True)
+        self.assertIs(result['strict_route'], False)
+        self.assertIs(result['ipv6'], True)
+        self.assertIsNone(result['dns_hijack'])
+
+    def test_xray_strategy_and_sniffing(self):
+        path = self.write('config.json', {
+            'dns': {'queryStrategy': 'UseIPv4'},
+            'inbounds': [{'protocol': 'socks', 'port': 10808,
+                          'sniffing': {'enabled': True, 'destOverride': ['http', 'tls', 'dns']}}],
+            'outbounds': [],
+            'routing': {'domainStrategy': 'AsIs', 'rules': []},
+        })
+        self.assertEqual(m.detect_core_format(path, path.read_text(encoding='utf-8')), 'xray')
+        result = m.read_core_config(path)
+        self.assertIs(result['ipv6'], False)
+        self.assertIs(result['dns_hijack'], True)
+        self.assertIsNone(result['strict_route'])
+
+    def test_xray_without_sniffing_reports_unknown_dns(self):
+        path = self.write('config.json', {'inbounds': [{'protocol': 'socks'}], 'outbounds': [], 'routing': {}})
+        self.assertIsNone(m.read_core_config(path)['dns_hijack'])
+
+    def test_unsupported_json_is_all_unknown(self):
+        path = self.write('config.json', {'hello': 'world'})
+        self.assertEqual(m.read_core_config(path), m._empty_core())
+
+    def test_forced_format_overrides_file_extension(self):
+        # A .yaml suffix would auto-select Clash; the explicit format must win.
+        path = self.dir / 'config.yaml'
+        path.write_text(json.dumps({'tun': {'enable': True, 'strict_route': True}}), encoding='utf-8')
+        result = m.read_core_config(path, 'sing-box')
+        self.assertIs(result['tun_enable'], True)
+        self.assertIs(result['strict_route'], True)
+
+
+class DetectCommand(unittest.TestCase):
+    def test_lists_cores_tuns_and_client_guesses(self):
+        raw = raw_state(processes=['FlClashCore', 'explorer'], adapters=[
+            {'Name': 'FlClash', 'InterfaceDescription': 'Meta Tunnel', 'Status': 'Up'},
+            {'Name': 'Ethernet', 'InterfaceDescription': 'Realtek', 'Status': 'Up'}])
+        result = m.detect(FakeProviders(raw))
+        self.assertEqual(result['cores'], ['FlClashCore'])
+        self.assertEqual([row['name'] for row in result['tun_adapters']], ['FlClash'])
+        self.assertIn('flclash', result['client_guesses'])
+        self.assertEqual(result['platform'], platform.system())
+
+    def test_unavailable_probe_is_refused(self):
+        with self.assertRaises(m.MonitorError):
+            m.detect(FakeProviders(None))
+
+    def test_cli_detect_needs_no_config(self):
+        with patch.object(m, 'detect', return_value={'platform': 'Windows'}):
+            self.assertEqual(m.main(['detect']), 0)
+
+
 class Output(unittest.TestCase):
     def test_state_carries_no_paths_or_addresses(self):
         with tempfile.TemporaryDirectory() as folder:

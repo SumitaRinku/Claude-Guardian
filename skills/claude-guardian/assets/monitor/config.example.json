@@ -2,8 +2,11 @@
   "version": 1,
   "target": "REPLACE_WITH_HOSTNAME",
   "proxy": {
+    "client": "flclash",
     "process_names": ["FlClashCore"],
-    "tun_adapter": "FlClash",
+    "tun_adapter": "auto",
+    "tun_match": [],
+    "config_format": "auto",
     "runtime_config": "C:\\Users\\REPLACE_WITH_USER\\AppData\\Roaming\\com.follow\\clash\\config.yaml"
   },
   "firewall": {

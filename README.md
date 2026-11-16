@@ -46,6 +46,15 @@
 
 Claude-Guardian 是一个给 Agent 用的 Skill。它把作者和社区的真实经验、整理好的资料和一批脚本交给 Agent，让 Agent **按你的需求和环境**，陪你一步步把订阅、账号、网络出口和运行环境准备好。每个人的系统、网络、预算和目标都不一样，所以它先了解你，再给适合你的做法；风险高的步骤由你拍板。
 
+## CCGuard 监控面板（Windows）
+
+本仓库同时发布 **CCGuard**：Claude-Guardian 的 Windows 只读监测面板。它不联网、不改系统、不需要管理员，实时检查代理核心、TUN、默认路由、防火墙、DNS 与 IPv6，并在失效时用盾牌托盘图标和系统通知提醒。
+
+- 支持 FlClash、Clash Verge Rev、Clash Nyanpasu、Clash for Windows、Mihomo / Clash.Meta、sing-box、Hiddify、v2rayN、NekoRay / NekoBox，也可自定义进程名与 TUN 名称片段。
+- 自动识别 TUN 网卡；Clash YAML、sing-box JSON、Xray JSON 的运行配置都能读，读不出的项显示 `unknown`，不当作通过。
+- 入口：`python skills/claude-guardian/scripts/monitor.py detect` 先识别候选核心与网卡，再用 `gui --config <private>/monitor.json --tray` 启动面板。
+- 配置说明、检查项与边界：[monitor.md](skills/claude-guardian/references/monitor.md)。
+
 ## Partners
 
 <table align="center">

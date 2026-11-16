@@ -656,3 +656,11 @@ Windows 多层网络修改由本机 SYSTEM 计划任务承接，复用系统调�
 监测不联网、不调用 `Set-*`、不重启核心、不修改配置，因此不触发接触门禁，也不消耗代理配额；面板只监听 `127.0.0.1`，沿用 Switch 的随机会话令牌、`Host`／`Origin`／`Sec-Fetch-Site` 校验与 CSP。托盘由用户手动启动，只用 WinForms 气泡通知，不安装服务、不建计划任务、不写自启；通知内容只有状态枚举与检查项名称，不含 IP、路径、节点或配置值。
 
 v1 只覆盖 Windows，其他平台记 `unknown` 而不冒充支持；`desktop` 只生成入口文件（B 档，可删除），其余动作属 A 档只读。监测通过不表示出口、DNS、账号或平台验收通过，修复仍按既有分级授权流程。风险为通知可能被专注助手抑制、托盘需要进程存活、`unknown` 易被误读为正常。回滚使用普通 revert。
+
+## ADR-077：监测适配多代理客户端与配置格式（2026-11-16，MONITOR-MULTI-20261116）
+
+需求是让本机只读监测不再绑定 FlClash 与 Mihomo YAML。`proxy` 段增加可选 `client` 预设、`config_format`、`tun_match`，并把 `process_names`、`tun_adapter`、`runtime_config` 改为可选：预设提供常见进程名、TUN 名称片段与配置格式，显式字段优先；`tun_adapter` 默认 `auto`，按名称与描述片段识别 TUN，客户端改网卡名后仍可用。新增 `detect` 动作，只读列出候选核心、TUN 网卡与可能的预设，不需要配置。
+
+配置解析在原有 Clash/Mihomo YAML 白名单键之外，增加 sing-box（顶层 `tun` 或 `inbounds[type=tun]`、`strict_route`、`inet4/inet6_address` 或 1.11+ 的 `address`、`route.rules` 的 `hijack-dns`）和 Xray（`dns.queryStrategy`、`routing.domainStrategy`、`sniffing.destOverride` 的 `dns`）的 JSON 映射。格式可自动识别或强制指定；格式不表达、键名变化或配置留空时仍记 `unknown`，不推测为通过。物理网卡排除自动识别到的 TUN，避免 TUN 的 DNS/IPv6 行干扰物理网卡检查。
+
+边界不变：只读、不联网、不调用 `Set-*`、不需要管理员、不安装服务或自启；仍只覆盖 Windows。预设与键名映射是对公开配置结构的适配，不代表每个客户端版本已真机验收；未验证项在文档标 unknown。风险是自动识别可能因重命名误判，可用 `process_names`、`tun_match`、`config_format` 显式覆盖。验证见 CHANGELOG，回滚使用普通 revert。

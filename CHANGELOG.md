@@ -1,5 +1,15 @@
 # 版本记录
 
+## 监测适配多代理客户端与配置格式（2026-11-16，MONITOR-MULTI-20261116，ADR-077）
+
+- `proxy` 段新增可选 `client` 预设（FlClash、Clash Verge Rev、Clash Nyanpasu、Clash for Windows、Mihomo / Clash.Meta、sing-box、Hiddify、v2rayN、NekoRay / NekoBox）、`config_format`（auto／clash／sing-box／xray）与 `tun_match`；`process_names`、`tun_adapter`、`runtime_config` 改为可选。预设提供进程名、TUN 名称片段与配置格式，显式字段优先；`tun_adapter` 默认 `auto`，按网卡名称／描述片段识别，客户端升级改网卡名后通常不用改配置；`runtime_config` 留空时三项配置检查记 `unknown`
+- 新增 `monitor.py detect`：无配置、只读列出正在运行的已知代理核心、候选 TUN 网卡和可能的 `client` 预设
+- 运行配置解析扩展：保留 Clash/Mihomo YAML 白名单键；新增 sing-box JSON（顶层 `tun` 或 `inbounds[type=tun]`、`enable`、`strict_route`、`inet4/inet6_address` 或 1.11+ 的 `address` 列表、`dns.strategy`、`route.rules` 的 `hijack-dns`）与 Xray JSON（`dns.queryStrategy`、`routing.domainStrategy`、`sniffing.destOverride` 的 `dns`）。格式按扩展名与顶层键自动识别，也可强制指定；读不出的项记 `unknown`
+- 物理网卡识别排除自动检测到的 TUN（包括 Mihomo、sing-tun、Hiddify 等描述），避免 TUN 的 DNS／IPv6 行干扰 `dns_servers` 与 `os_ipv6`
+- 文档：`references/monitor.md` 增加客户端预设、TUN 自动识别、常见运行配置位置与各格式可读字段；`config.example.json` 展示新字段；README 增加 CCGuard 简介
+- 验证：Windows 11 本机，`python -m unittest tests.test_monitor tests.test_monitor_gui -v` 84 项通过；`node tests/monitor-interaction.cjs` 通过；`python -m compileall -q skills/claude-guardian/scripts` 通过。新增回归覆盖预设优先级、空进程名回退、TUN 自动识别与精确名优先、TUN 不计入物理网卡、sing-box／Xray JSON、格式强制与 `detect`。其他客户端与版本未逐项真机验收（not_run），只按公开配置结构做合成测试
+- 风险与回滚：自动识别可能因客户端重命名误判，可用显式字段覆盖；`unknown` 不等于通过。仅影响监测脚本、配置模板、测试与文档；回滚使用普通 revert
+
 ## 监测面板缺陷修复与 Windows 本地测试可移植（2026-11-15，MONITOR-FIX-20261115）
 
 - 修复面板「保存到配置」写坏配置：`apply_settings` 写入的 `alerts.paused` 被 `load_config` 的严格键集拒绝，而文件已先被覆盖，下次启动即失败；保存失败分支还会在设置校验失败后继续写文件。现 `paused` 为可选布尔值，新增 `validate_config` 供保存前完整校验，校验通过才原子替换（临时文件 + `os.replace`），失败时原配置不动
