@@ -3,3 +3,5 @@
 # Preserve exact authorized source bytes and manifest hashes on all platforms.
 skills/claude-guardian/sources/** -text
 *.pdf binary
+# Third-party Inno Setup translation kept byte for byte (see packaging/ccguard.iss).
+packaging/languages/*.isl -text

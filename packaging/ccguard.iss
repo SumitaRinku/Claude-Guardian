@@ -35,6 +35,8 @@ LicenseFile=..\LICENSE
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
+; Pick the wizard language from the Windows UI language; ask only when neither matches.
+ShowLanguageDialog=auto
 ; The panel holds this mutex (Local\CCGuard.Monitor.Instance): ask to close it before files change.
 AppMutex=CCGuard.Monitor.Instance
 CloseApplications=yes
@@ -43,11 +45,10 @@ VersionInfoProductName=CCGuard
 VersionInfoDescription=CCGuard Setup
 
 [Languages]
-; ChineseSimplified.isl is an unofficial Inno Setup translation that standard installs do not ship;
-; use it when the compiler has it, otherwise the wizard is English (the app itself is Chinese).
-#if FileExists(AddBackslash(CompilerPath) + "Languages\ChineseSimplified.isl")
-Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
-#endif
+; languages\ChineseSimplified.isl: the user-contributed translation from the official Inno Setup
+; repository (jrsoftware/issrc, Files/Languages/Unofficial, tag is-6_7_4, commit c2913c99),
+; kept byte for byte with its translator credits; Inno Setup does not install it by default.
+Name: "chinesesimplified"; MessagesFile: "languages\ChineseSimplified.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]

@@ -1,5 +1,12 @@
 # 版本记录
 
+## 安装向导中文（2026-11-17，MONITOR-EXE-ZH-20261117）
+
+- 安装向导改为简体中文：`packaging/languages/ChineseSimplified.isl` 取自 Inno Setup 官方仓库 jrsoftware/issrc 的 `Files/Languages/Unofficial/ChineseSimplified.isl`（标签 `is-6_7_4`，提交 `c2913c99`，20905 字节，git blob `d6a11c44`），原样保留译者署名；`.gitattributes` 标记 `-text` 保持原始字节。`ccguard.iss` 直接引用仓库内文件，不再依赖构建机是否装有该翻译；`ShowLanguageDialog=auto` 按 Windows 界面语言自动选择，都不匹配时才询问。英文向导保留
+- 测试：`test_windows_build.py` 改为检查安装脚本引用仓库内翻译、文件哈希与上游一致、保留译者署名、不做换行规范化
+- 验证：Windows 11 本机 `python -m unittest discover -s tests` 1804 项通过（442 项 POSIX 专属跳过）；Node 页面测试与 `compileall` 通过；下载的翻译文件大小与 git blob 哈希和上游标签一致。安装程序由 CI 构建并做静默安装、自检、卸载验证，结果见发布记录
+- 风险与回滚：翻译文件标注适用于 Inno Setup 6.5.0 及以上，构建机版本过旧时可能缺少个别消息；回滚使用普通 revert
+
 ## Windows 安装程序与出口页来源说明（2026-11-17，MONITOR-EXE-20261117，ADR-083）
 
 - 安装程序：新增 `packaging/ccguard_app.py`（`CCGuard.exe` 入口：无参数时首次生成配置并打开面板；带参数时交给 `monitor.py` 命令行，开机自启和快捷方式用它；`--self-test` 不开窗口检查打包内容）、`packaging/ccguard.spec`（PyInstaller 文件夹版、无控制台、CCGuard 图标与版本信息）、`packaging/ccguard.iss`（Inno Setup 6：当前用户安装到 `%LOCALAPPDATA%\Programs\CCGuard`，不需要管理员；开始菜单快捷方式带 `CCGuard.Monitor` 应用标识；可选桌面图标；安装或升级前关闭正在运行的面板；卸载删除程序、快捷方式和开机自启项，保留 `monitor.json` 与 `history.jsonl`；中英文向导）

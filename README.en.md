@@ -400,6 +400,7 @@ Report problems through [Issues](https://github.com/SumitaRinku/CCguard/issues).
 - The **exit score**'s trust score, IP type, location, network and risk flags come from the public API of [ip.net.coffee](https://ip.net.coffee/claude/); the score bands and restricted-region rule follow its Claude IP check page. Open that site in your browser for the full check (Claude exit IP, DNS and WebRTC leaks).
 - The **exit IP** comes from Cloudflare's `1.1.1.1/cdn-cgi/trace`.
 - Both are third-party services that CCGuard only contacts when you click "检测"; if they change, the exit score shows "检测失败" and local monitoring is unaffected.
+- The installer wizard's Simplified Chinese translation is the community translation carried in the official Inno Setup repository ([jrsoftware/issrc](https://github.com/jrsoftware/issrc), `Files/Languages/Unofficial/ChineseSimplified.isl`, maintained by Kira), kept with its credits.
 - The project is maintained on top of [Claude-Guardian](https://github.com/DUNHKpcc/Claude-Guardian).
 
 ## License

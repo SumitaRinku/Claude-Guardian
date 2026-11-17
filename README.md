@@ -402,6 +402,7 @@ git clone https://github.com/SumitaRinku/CCguard.git Claude-Guardian
 - **出口评分**的信任分、IP 类型、地区、运营商与风险标记来自 [ip.net.coffee](https://ip.net.coffee/claude/) 的公开接口，评分分段和受限地区规则与其 Claude IP 检测页一致；完整检测页（含 Claude 出口 IP、DNS 与 WebRTC 泄露）请在浏览器里打开该网站查看。
 - **出口 IP** 由 Cloudflare 的 `1.1.1.1/cdn-cgi/trace` 返回。
 - 两项服务都由第三方提供，CCGuard 只在你点击“检测”时请求它们；服务调整时出口评分会显示“检测失败”，不影响本机监测。
+- 安装向导的简体中文翻译来自 Inno Setup 官方仓库收录的社区翻译（[jrsoftware/issrc](https://github.com/jrsoftware/issrc) 的 `Files/Languages/Unofficial/ChineseSimplified.isl`，维护者 Kira），原样保留其署名。
 - 项目基于 [Claude-Guardian](https://github.com/DUNHKpcc/Claude-Guardian) 维护。
 
 ## 许可

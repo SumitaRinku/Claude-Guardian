@@ -61,12 +61,24 @@ class InstallerAgreesWithTheApp(unittest.TestCase):
     def test_uninstall_removes_the_autostart_entry(self):
         self.assertIn(r'Name: "{userstartup}\%s.lnk"' % monitor.APP_NAME, ISS)
 
-    def test_english_wizard_always_chinese_when_available(self):
-        # Regression: the runner's Inno Setup has no ChineseSimplified.isl and the build failed.
+    def test_chinese_wizard_ships_with_the_repo(self):
+        # Regression: the runner's Inno Setup has no ChineseSimplified.isl and the build failed,
+        # so the translation is kept in the repository and referenced relative to the script.
+        self.assertIn(r'Name: "chinesesimplified"; MessagesFile: "languages\ChineseSimplified.isl"', ISS)
         self.assertIn('Name: "english"; MessagesFile: "compiler:Default.isl"', ISS)
-        guard = ISS.index(r'#if FileExists(AddBackslash(CompilerPath) + "Languages\ChineseSimplified.isl")')
-        self.assertLess(guard, ISS.index('Name: "chinesesimplified"'))
-        self.assertLess(ISS.index('Name: "chinesesimplified"'), ISS.index('#endif', guard))
+        self.assertIn('ShowLanguageDialog=auto', ISS)
+        isl = ROOT / 'packaging/languages/ChineseSimplified.isl'
+        data = isl.read_bytes()
+        import hashlib
+        blob = hashlib.sha1((b'blob %d\x00' % len(data)) + data).hexdigest()
+        self.assertEqual(blob, 'd6a11c4490de07dad443ade668289fc954dfa1ed')  # upstream is-6_7_4
+        text = data.decode('utf-8')
+        self.assertIn('LanguageID=$0804', text)
+        self.assertIn('Maintained by Zhenghan Yang', text)
+
+    def test_translation_is_not_line_ending_normalised(self):
+        attributes = (ROOT / '.gitattributes').read_text(encoding='utf-8')
+        self.assertIn('packaging/languages/*.isl -text', attributes)
 
 
 class Bundle(unittest.TestCase):
