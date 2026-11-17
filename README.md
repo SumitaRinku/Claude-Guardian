@@ -6,7 +6,7 @@
 
 **Windows 本机只读监测面板：代理、TUN、路由、防火墙、DNS 与 IPv6，一眼看清。**
 
-不出站 · 不改系统 · 不需要管理员 · 不安装常驻服务
+监测不出站 · 出口评分手动触发 · 不改系统 · 不需要管理员
 
 <p>
   <img alt="Windows 10/11" src="https://img.shields.io/badge/Windows-10%2F11-0078D4?style=flat-square">
@@ -27,7 +27,7 @@
 
 CCGuard 是本仓库在 [Claude-Guardian](https://github.com/DUNHKpcc/Claude-Guardian) 基础上维护的 Windows 本机只读监测面板。它面向已经部署好代理、TUN 和防火墙的环境，持续回答一个问题：**现在这台机器上的防护还在不在？**
 
-它把状态拆成 10 项检查，用绿 / 橙 / 红 / 灰显示在窗口、托盘和可选网页里；关键项失效时用系统通知提醒。监测本身不修改防火墙、不重启代理、不改配置，也不发起任何出站请求，适合长期开着。
+它把状态拆成 10 项检查，用绿 / 橙 / 红 / 灰显示在窗口、托盘和可选网页里；关键项失效时用系统通知提醒。监测本身不修改防火墙、不重启代理、不改配置，10 项检查也不发起出站请求，适合长期开着；需要看出口 IP 质量时，再手动点一次出口评分。
 
 > 监测通过只说明本机状态与配置符合预期，不代表出口 IP、DNS、账号或平台验收通过；它不承诺免封，也不替代 Claude-Guardian 的部署与分级授权流程。
 
@@ -42,6 +42,8 @@ CCGuard 是本仓库在 [Claude-Guardian](https://github.com/DUNHKpcc/Claude-Gua
 | **新界面** | WebView（pywebview + Edge WebView2）桌面面板：状态横幅、侧栏异常计数、彩色日志、跟随系统深色模式，窗口按内容自动定尺寸；没装 pywebview 时自动回退 tkinter 面板 |
 | **状态历史** | 每项检查最近 24 小时／7 天的状态时间线，未运行监测的时段单独标出；记录存在配置旁的 `history.jsonl`，只含检查项和状态，保留 7 天 |
 | **处理指引** | 点开任一检查卡片，查看它检查什么、当前结果对应的处理步骤、这一项最近 24 小时的变化和结果代码 |
+| **检测日志** | 每项检查都记下读了哪条系统查询、看到了什么、为什么判成这个状态，在卡片详情的“检测过程”里逐条列出；不含 IP 和文件路径。原理见 [检测原理](skills/claude-guardian/references/monitor.md#principles) |
+| **出口评分** | “出口”页手动检测：经当前网络向 Cloudflare 取出口 IP，再从 [ip.net.coffee](https://ip.net.coffee/claude/) 取信任分、IP 类型、地区、运营商和风险标记，并列出每一步请求；可一键在浏览器打开完整详情。不访问 Claude，见 [出口评分](skills/claude-guardian/references/monitor.md#exit-score) |
 | **窗口 + 托盘 + 网页** | WebView 面板（默认）／tkinter 面板（回退）、托盘通知、`127.0.0.1` 本地网页备选 |
 | **系统通知** | 状态跃迁时提醒，带冷却与恢复提示；可暂停 |
 | **可选开机自启** | 当前用户 Startup 快捷方式，登录后隐藏到托盘；默认关闭，可随时撤销 |
@@ -53,7 +55,8 @@ CCGuard 是本仓库在 [Claude-Guardian](https://github.com/DUNHKpcc/Claude-Gua
 ## 安全边界
 
 - **只读**：不调用 `Set-*`，不改防火墙、路由、代理配置，不重启核心。
-- **不出站**：不发起联网请求，不做出口 IP、DNS 泄露、延迟或 WebRTC 测试；网页模式只监听 `127.0.0.1`。
+- **监测不出站**：10 项检查只读本机，不发起联网请求，不做 DNS 泄露、延迟或 WebRTC 测试；网页模式只监听 `127.0.0.1`。
+- **出口评分只在你点击时联网**：只请求 `1.1.1.1/cdn-cgi/trace` 和 `ip.net.coffee/api/iprisk`，不访问 claude.ai 或 anthropic.com；出口 IP 会发给 ip.net.coffee，界面只显示前两段。完整验收页由你在自己的浏览器里打开。
 - **不要求管理员**：监测以普通用户运行；提权只属于其他防护脚本。
 - **默认不常驻、不自启**：不建 Windows 服务或计划任务，默认不写 Startup。只有你显式开启「开机自启」时，才在当前用户 Startup 目录创建一个 CCGuard 快捷方式，可随时用 `autostart-disable` 或在面板左侧栏关闭。
 - **不碰凭据**：通知和状态只含状态枚举与检查项名称，不含 IP、路径、节点、订阅链接或配置值。
@@ -74,7 +77,7 @@ CCGuard 是本仓库在 [Claude-Guardian](https://github.com/DUNHKpcc/Claude-Gua
 
 **方式 A：Release 包（推荐，双击即用）**
 
-下载 [`claude-guardian-0.3.0.zip`](https://github.com/SumitaRinku/CCguard/releases/download/v0.3.0/claude-guardian-0.3.0.zip)，解压后得到 `claude-guardian\` 目录。双击其中的 `CCGuard.pyw` 或 `CCGuard.cmd` 即可。
+下载 [`claude-guardian-0.4.0.zip`](https://github.com/SumitaRinku/CCguard/releases/download/v0.4.0/claude-guardian-0.4.0.zip)，解压后得到 `claude-guardian\` 目录。双击其中的 `CCGuard.pyw` 或 `CCGuard.cmd` 即可。
 
 **方式 B：克隆仓库（最新源码）**
 
@@ -155,8 +158,11 @@ python ...\monitor.py autostart-status
 其他入口：
 
 ```bat
-:: 单次采集，输出 JSON
+:: 单次采集，输出 JSON（每项含 source 与 evidence 检测过程）
 python ...\monitor.py check --config <private>\monitor.json
+
+:: 出口评分（联网：Cloudflare trace + ip.net.coffee，不访问 Claude；不需要配置）
+python ...\monitor.py ip-score
 
 :: 本地网页（只监听 127.0.0.1，带随机会话令牌）
 python ...\monitor.py serve --config <private>\monitor.json
@@ -322,7 +328,7 @@ python tools/package_skill.py --output <new.zip>
 ```
 
 - CI 在 Linux、macOS、Windows 与 Python 3.10 Linux 上运行；`tools/ci_scope.py` 区分文档与代码推送。
-- 最新发布 `v0.3.0`；包含双击启动、一键启动、开机自启与界面改进。完整记录见 [CHANGELOG.md](CHANGELOG.md)，设计取舍见 [docs/decisions.md](docs/decisions.md)。
+- 最新发布 `v0.4.0`；包含 WebView 新界面、中文字体、状态历史、处理指引、检测日志、出口评分与关闭卡死修复。完整记录见 [CHANGELOG.md](CHANGELOG.md)，设计取舍见 [docs/decisions.md](docs/decisions.md)。
 
 ## 完整 Claude-Guardian Skill
 
@@ -372,6 +378,7 @@ git clone https://github.com/SumitaRinku/CCguard.git Claude-Guardian
 | 从这里开始 | 内容 |
 | --- | --- |
 | [监测说明](skills/claude-guardian/references/monitor.md) | 配置、客户端预设、检查项、通知与边界 |
+| [检测原理](skills/claude-guardian/references/monitor.md#principles) | 每项检查的数据来源、判定规则与检测日志；出口评分的请求与隐私 |
 | [脚本索引](skills/claude-guardian/references/scripts-index.md) | 监测与 Claude-Guardian 脚本入口 |
 | [决策记录](docs/decisions.md) | ADR 与实现取舍 |
 | [更新记录](CHANGELOG.md) | 每个版本改了什么、验证与回滚 |

@@ -697,3 +697,11 @@ tkinter 面板的外观和刷新性能达不到要求（Canvas 手绘卡片、�
 
 界面去掉常驻的说明、免责和统计文字：只读、不联网等边界已写在文档里，不在每个页面重复；总体状态只在横幅出现一次。窗口按内容定尺寸，十个检查项不需要滚动。验证见 CHANGELOG，回滚使用普通 revert。
 
+## ADR-082：出口评分与检测日志（2026-11-17，MONITOR-SCORE-20261117）
+
+用户要求面板能用当前网络拉取 https://ip.net.coffee/claude/ 的分数，并能跳转浏览器看详情。这个页面在浏览器里会请求 `claude.ai/cdn-cgi/trace` 取 Claude 看到的出口 IP，再测 claude.ai、anthropic.com 的可用性，属于接触 Claude；按 PC0 和[浏览器环境验收](../skills/claude-guardian/references/whole-machine-ipv4.md#browser-acceptance)，这一页只能由用户本人打开。因此面板不加载这个页面，也不复现它的 Claude 请求：出口 IP 改从 Cloudflare `1.1.1.1/cdn-cgi/trace` 取（页面本身也用它取 Cloudflare 出口），再调同站的 `/api/iprisk/<IP>` 取分，评分分段和受限地区规则照页面实现。代价是评的是 Cloudflare 看到的出口，代理规则让 claude.ai 走不同节点时会和浏览器页不同，文档写明以浏览器页为准。
+
+监测原本承诺不联网。出口评分是唯一的例外，只在用户点击时运行，不定时、不自动，只联系这两个固定地址；完整 IP 会出现在发往 ip.net.coffee 的请求里，这是取分的前提，界面和日志只显示前两段，结果不落盘。
+
+检测日志在判定处同时生成，不另写一套解释逻辑，避免日志和判定不一致；内容沿用状态输出不带 IP 和路径的规则，因为状态文件会交给托盘和本地网页。验证见 CHANGELOG，回滚使用普通 revert。
+

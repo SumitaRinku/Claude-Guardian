@@ -515,41 +515,79 @@ def _norm(raw):
     }
 
 
+SOURCES = {
+    'proxy_core': 'Get-Process',
+    'tun_adapter': 'Get-NetAdapter',
+    'default_route': 'Get-NetRoute（IPv4 默认路由）',
+    'firewall_block': 'Get-NetFirewallProfile',
+    'guardian_rules': 'Get-NetFirewallRule -Direction Outbound -Action Allow -Enabled True',
+    'core_ipv6': '代理核心运行配置',
+    'strict_route': '代理核心运行配置',
+    'dns_hijack': '代理核心运行配置',
+    'dns_servers': 'Get-DnsClientServerAddress -AddressFamily IPv4',
+    'os_ipv6': 'Get-NetAdapterBinding -ComponentID ms_tcpip6',
+}
+EVIDENCE_LIMIT = 8
+
+
+def _names(items, limit=EVIDENCE_LIMIT):
+    items = [str(item) for item in items]
+    shown = '、'.join(items[:limit])
+    return shown + ('等 %d 个' % len(items) if len(items) > limit else '') if items else '无'
+
+
 def evaluate(cfg, raw, core):
+    """Checks with their evidence: the lines say what was read and why the state follows.
+
+    Evidence names processes, adapters, profiles and counts only; it never contains addresses or
+    file paths, because the state is shared with the tray and the local web page.
+    """
     data = _norm(raw)
     profile = proxy_profile(cfg)
     checks = []
 
-    def add(check_id, state, code):
-        checks.append({'id': check_id, 'state': state, 'code': code})
+    def add(check_id, state, code, evidence):
+        checks.append({'id': check_id, 'state': state, 'code': code,
+                       'source': SOURCES.get(check_id, ''), 'evidence': list(evidence)})
 
     running = {str(n).casefold().removesuffix('.exe') for n in (data['processes'] or [])}
     wanted = {str(n).casefold().removesuffix('.exe')
               for n in (profile['process_names'] or KNOWN_CORES)}
+    want_line = '期望的核心进程：' + _names(sorted(wanted)) + (
+        '（客户端预设 %s）' % profile['client'] if profile['client'] != 'custom' else '')
     if data['processes'] is None:
-        add('proxy_core', 'unknown', 'PROCESS_QUERY_UNAVAILABLE')
+        add('proxy_core', 'unknown', 'PROCESS_QUERY_UNAVAILABLE', ['读取进程列表失败', want_line])
     elif wanted & running:
-        add('proxy_core', 'ok', 'PROXY_CORE_RUNNING')
+        add('proxy_core', 'ok', 'PROXY_CORE_RUNNING',
+            ['读取到 %d 个进程' % len(running), want_line, '正在运行：' + _names(sorted(wanted & running))])
     else:
-        add('proxy_core', 'fail', 'PROXY_CORE_MISSING')
+        add('proxy_core', 'fail', 'PROXY_CORE_MISSING',
+            ['读取到 %d 个进程' % len(running), want_line, '没有找到其中任何一个'])
 
     adapters = data['adapters'] or []
     tuns = find_tun_adapters(profile, adapters)
     tun = tuns[0] if tuns else None
+    match_line = ('按配置的网卡名 %s 查找' % profile['tun_adapter']
+                  if profile['tun_adapter'] and profile['tun_adapter'] != 'auto'
+                  else '按网卡名称与描述里的 TUN 特征自动识别')
     if data['adapters'] is None:
-        add('tun_adapter', 'unknown', 'ADAPTER_QUERY_UNAVAILABLE')
+        add('tun_adapter', 'unknown', 'ADAPTER_QUERY_UNAVAILABLE', ['读取网卡列表失败', match_line])
     elif tun is None:
-        add('tun_adapter', 'fail', 'TUN_ADAPTER_MISSING')
+        add('tun_adapter', 'fail', 'TUN_ADAPTER_MISSING',
+            ['读取到 %d 块网卡' % len(adapters), match_line, '没有找到 TUN 网卡'])
     elif str(tun.get('Status') or '').lower() != 'up':
-        add('tun_adapter', 'fail', 'TUN_ADAPTER_DOWN')
+        add('tun_adapter', 'fail', 'TUN_ADAPTER_DOWN',
+            ['读取到 %d 块网卡' % len(adapters), match_line,
+             '找到 %s，状态 %s，不是 Up' % (_name(tun), tun.get('Status') or '未知')])
     else:
-        add('tun_adapter', 'ok', 'TUN_ADAPTER_UP')
+        add('tun_adapter', 'ok', 'TUN_ADAPTER_UP',
+            ['读取到 %d 块网卡' % len(adapters), match_line, '找到 %s，状态 Up' % _name(tun)])
 
     routes = data['routes']
     if routes is None:
-        add('default_route', 'unknown', 'ROUTE_QUERY_UNAVAILABLE')
+        add('default_route', 'unknown', 'ROUTE_QUERY_UNAVAILABLE', ['读取默认路由失败'])
     elif not routes:
-        add('default_route', 'fail', 'DEFAULT_ROUTE_MISSING')
+        add('default_route', 'fail', 'DEFAULT_ROUTE_MISSING', ['没有 IPv4 默认路由'])
     else:
         def weight(route):
             try:
@@ -561,87 +599,116 @@ def evaluate(cfg, raw, core):
         configured = str(profile.get('tun_adapter') or '').strip().casefold()
         if configured and configured != 'auto':
             tun_aliases.add(configured)
+        lines = ['%s：跃点 %s + 接口跃点 %s' % (route.get('InterfaceAlias') or '未知',
+                                             route.get('RouteMetric'), route.get('InterfaceMetric'))
+                 for route in sorted(routes, key=weight)[:EVIDENCE_LIMIT]]
+        lines.insert(0, '共 %d 条默认路由，跃点之和最小的生效' % len(routes))
         if str(best.get('InterfaceAlias') or '').casefold() in tun_aliases:
-            add('default_route', 'ok', 'DEFAULT_ROUTE_VIA_TUN')
+            add('default_route', 'ok', 'DEFAULT_ROUTE_VIA_TUN', lines + ['生效的是 TUN 网卡 %s' % best.get('InterfaceAlias')])
         else:
-            add('default_route', 'fail', 'DEFAULT_ROUTE_NOT_TUN')
+            add('default_route', 'fail', 'DEFAULT_ROUTE_NOT_TUN',
+                lines + ['生效的是 %s，不是 TUN 网卡' % (best.get('InterfaceAlias') or '未知网卡')])
 
     firewall = data['firewall']
     if firewall is None:
-        add('firewall_block', 'unknown', 'FIREWALL_QUERY_UNAVAILABLE')
-    elif any(not _flag(p.get('Enabled')) for p in firewall):
-        add('firewall_block', 'fail', 'FIREWALL_PROFILE_DISABLED')
-    elif cfg['firewall']['expect_default_block'] and any(
-            not _blocked(p.get('DefaultOutboundAction')) for p in firewall):
-        add('firewall_block', 'fail', 'DEFAULT_OUTBOUND_ALLOW')
+        add('firewall_block', 'unknown', 'FIREWALL_QUERY_UNAVAILABLE', ['读取防火墙配置文件失败'])
     else:
-        add('firewall_block', 'ok', 'DEFAULT_OUTBOUND_BLOCKED' if cfg['firewall']['expect_default_block'] else 'DEFAULT_OUTBOUND_NOT_REQUIRED')
+        lines = ['%s：%s，默认出站 %s' % (p.get('Name') or '未知', '已启用' if _flag(p.get('Enabled')) else '已关闭',
+                                      '阻止' if _blocked(p.get('DefaultOutboundAction')) else '允许')
+                 for p in firewall]
+        if any(not _flag(p.get('Enabled')) for p in firewall):
+            add('firewall_block', 'fail', 'FIREWALL_PROFILE_DISABLED', lines + ['有配置文件被关闭'])
+        elif cfg['firewall']['expect_default_block'] and any(
+                not _blocked(p.get('DefaultOutboundAction')) for p in firewall):
+            add('firewall_block', 'fail', 'DEFAULT_OUTBOUND_ALLOW', lines + ['要求默认出站为阻止'])
+        elif cfg['firewall']['expect_default_block']:
+            add('firewall_block', 'ok', 'DEFAULT_OUTBOUND_BLOCKED', lines)
+        else:
+            add('firewall_block', 'ok', 'DEFAULT_OUTBOUND_NOT_REQUIRED', lines + ['配置未要求默认出站阻止'])
 
     rules = data['rules']
     prefix = cfg['firewall']['allow_rule_prefix']
     if rules is None:
-        add('guardian_rules', 'unknown', 'RULE_QUERY_UNAVAILABLE')
+        add('guardian_rules', 'unknown', 'RULE_QUERY_UNAVAILABLE', ['读取防火墙规则失败'])
     else:
         count = sum(1 for item in rules if isinstance(item, str) and item.startswith(prefix))
+        lines = ['启用的出站放行规则 %d 条' % len(rules),
+                 '名称以 %s 开头的 %d 条，下限 %d 条' % (prefix, count, cfg['firewall']['min_allow_rules'])]
         if count < cfg['firewall']['min_allow_rules']:
-            add('guardian_rules', 'degraded', 'GUARDIAN_RULES_MISSING')
+            add('guardian_rules', 'degraded', 'GUARDIAN_RULES_MISSING', lines)
         else:
-            add('guardian_rules', 'ok', 'GUARDIAN_RULES_PRESENT')
+            add('guardian_rules', 'ok', 'GUARDIAN_RULES_PRESENT', lines)
+
+    if not profile['runtime_config']:
+        core_line = '未配置 proxy.runtime_config，读不到运行配置'
+    else:
+        core_line = '读取运行配置（格式：%s）' % (
+            '自动识别' if profile['config_format'] == 'auto' else profile['config_format'])
+
+    def setting(key, value):
+        return '%s = %s' % (key, '读不到' if value is None else str(value).lower())
 
     if core['ipv6'] is None:
-        add('core_ipv6', 'unknown', 'CORE_CONFIG_UNAVAILABLE')
+        add('core_ipv6', 'unknown', 'CORE_CONFIG_UNAVAILABLE', [core_line, setting('ipv6', None)])
     elif core['ipv6']:
-        add('core_ipv6', 'degraded', 'CORE_IPV6_ON')
+        add('core_ipv6', 'degraded', 'CORE_IPV6_ON', [core_line, setting('ipv6', True), '要求为 false'])
     else:
-        add('core_ipv6', 'ok', 'CORE_IPV6_OFF')
+        add('core_ipv6', 'ok', 'CORE_IPV6_OFF', [core_line, setting('ipv6', False)])
 
     if core['strict_route'] is None:
-        add('strict_route', 'unknown', 'STRICT_ROUTE_UNKNOWN')
+        add('strict_route', 'unknown', 'STRICT_ROUTE_UNKNOWN', [core_line, setting('strict-route', None)])
     elif core['strict_route']:
-        add('strict_route', 'ok', 'STRICT_ROUTE_ON')
+        add('strict_route', 'ok', 'STRICT_ROUTE_ON', [core_line, setting('strict-route', True)])
     else:
-        add('strict_route', 'degraded', 'STRICT_ROUTE_OFF')
+        add('strict_route', 'degraded', 'STRICT_ROUTE_OFF', [core_line, setting('strict-route', False), '要求为 true'])
 
     if core['dns_hijack'] is None:
-        add('dns_hijack', 'unknown', 'DNS_HIJACK_UNKNOWN')
+        add('dns_hijack', 'unknown', 'DNS_HIJACK_UNKNOWN', [core_line, '读不到 DNS 接管设置'])
     elif core['dns_hijack']:
-        add('dns_hijack', 'ok', 'DNS_HIJACK_ON')
+        add('dns_hijack', 'ok', 'DNS_HIJACK_ON', [core_line, '配置了 53 端口 DNS 接管'])
     else:
-        add('dns_hijack', 'degraded', 'DNS_HIJACK_MISSING')
+        add('dns_hijack', 'degraded', 'DNS_HIJACK_MISSING', [core_line, '没有配置 53 端口 DNS 接管'])
 
     physical = _physical(adapters, tuns)
+    physical_line = '已连接的物理网卡：' + _names([_name(a) for a in physical])
     expected = {str(item) for item in cfg['network']['expect_dns_servers']}
     if not expected:
-        add('dns_servers', 'ok', 'DNS_SERVERS_NOT_CHECKED')
+        add('dns_servers', 'ok', 'DNS_SERVERS_NOT_CHECKED', ['配置没有填写期望的 DNS，不检查'])
     elif data['dns'] is None:
-        add('dns_servers', 'unknown', 'DNS_QUERY_UNAVAILABLE')
+        add('dns_servers', 'unknown', 'DNS_QUERY_UNAVAILABLE', ['读取网卡 DNS 失败'])
     elif not physical:
-        add('dns_servers', 'unknown', 'NO_PHYSICAL_ADAPTER')
+        add('dns_servers', 'unknown', 'NO_PHYSICAL_ADAPTER', [physical_line])
     else:
         aliases = {_name(a) for a in physical}
         actual = [row for row in data['dns'] if str(row.get('InterfaceAlias') or '') in aliases]
+        lines = [physical_line, '期望 %d 个 DNS 地址' % len(expected)]
+        lines += ['%s：%d 个地址，%s' % (row.get('InterfaceAlias'), len(_addresses(row.get('ServerAddresses'))),
+                                     '与期望一致' if _addresses(row.get('ServerAddresses')) == expected else '与期望不同')
+                  for row in actual]
         if not actual:
-            add('dns_servers', 'unknown', 'DNS_QUERY_UNAVAILABLE')
+            add('dns_servers', 'unknown', 'DNS_QUERY_UNAVAILABLE', lines + ['这些网卡没有 DNS 记录'])
         elif all(_addresses(row.get('ServerAddresses')) == expected for row in actual):
-            add('dns_servers', 'ok', 'DNS_SERVERS_MATCH')
+            add('dns_servers', 'ok', 'DNS_SERVERS_MATCH', lines)
         else:
-            add('dns_servers', 'degraded', 'DNS_SERVERS_DIFFER')
+            add('dns_servers', 'degraded', 'DNS_SERVERS_DIFFER', lines)
 
     if not cfg['network']['expect_ipv6_disabled']:
-        add('os_ipv6', 'ok', 'OS_IPV6_NOT_REQUIRED')
+        add('os_ipv6', 'ok', 'OS_IPV6_NOT_REQUIRED', ['配置未要求关闭系统 IPv6，不检查'])
     elif data['ipv6'] is None:
-        add('os_ipv6', 'unknown', 'IPV6_QUERY_UNAVAILABLE')
+        add('os_ipv6', 'unknown', 'IPV6_QUERY_UNAVAILABLE', ['读取 IPv6 绑定失败'])
     elif not physical:
-        add('os_ipv6', 'unknown', 'NO_PHYSICAL_ADAPTER')
+        add('os_ipv6', 'unknown', 'NO_PHYSICAL_ADAPTER', [physical_line])
     else:
         aliases = {_name(a) for a in physical}
         rows = [row for row in data['ipv6'] if str(row.get('Name') or '') in aliases]
+        lines = [physical_line] + ['%s：IPv6 %s' % (row.get('Name'), '已启用' if _flag(row.get('Enabled')) else '已禁用')
+                                   for row in rows]
         if not rows:
-            add('os_ipv6', 'unknown', 'IPV6_QUERY_UNAVAILABLE')
+            add('os_ipv6', 'unknown', 'IPV6_QUERY_UNAVAILABLE', lines + ['这些网卡没有 IPv6 绑定记录'])
         elif any(_flag(row.get('Enabled')) for row in rows):
-            add('os_ipv6', 'degraded', 'OS_IPV6_ENABLED')
+            add('os_ipv6', 'degraded', 'OS_IPV6_ENABLED', lines)
         else:
-            add('os_ipv6', 'ok', 'OS_IPV6_DISABLED')
+            add('os_ipv6', 'ok', 'OS_IPV6_DISABLED', lines)
 
     order = {check_id: index for index, check_id in enumerate(CHECK_IDS)}
     checks.sort(key=lambda item: order.get(item['id'], 99))
@@ -767,7 +834,9 @@ class Store:
             state = state_of(self.cfg, self.providers)
         except Exception:
             state = dict(self.current, checked_at=int(time.time()), overall='unknown',
-                         checks=[{'id': check_id, 'state': 'unknown', 'code': 'COLLECTOR_FAILED'} for check_id in CHECK_IDS])
+                         checks=[{'id': check_id, 'state': 'unknown', 'code': 'COLLECTOR_FAILED',
+                                  'source': SOURCES.get(check_id, ''), 'evidence': ['本次采集出错']}
+                                 for check_id in CHECK_IDS])
         with self.lock:
             self.current = state
         self.write(state)
@@ -1087,7 +1156,7 @@ def main(argv=None):
         if hasattr(stream, 'reconfigure'):
             stream.reconfigure(encoding='utf-8')
     parser = argparse.ArgumentParser(description='CCGuard 本机实时监测（只读、不联网）')
-    parser.add_argument('action', choices=['quickstart', 'check', 'detect', 'serve', 'gui', 'desktop',
+    parser.add_argument('action', choices=['quickstart', 'check', 'detect', 'ip-score', 'serve', 'gui', 'desktop',
                                            'register-notifier', 'unregister-notifier', 'notifier-status',
                                            'autostart-enable', 'autostart-disable', 'autostart-status'])
     parser.add_argument('--config', type=Path)
@@ -1156,6 +1225,12 @@ def main(argv=None):
         if args.action == 'detect':
             print(json.dumps(detect(), ensure_ascii=False))
             return 0
+        if args.action == 'ip-score':
+            # Networked and explicit: Cloudflare trace + ip.net.coffee score; never Claude.
+            import ip_score
+            result = ip_score.check()
+            print(json.dumps(result, ensure_ascii=False))
+            return 0 if result.get('ok') else 1
         if args.config is None:
             raise MonitorError('请用 --config 指定监测配置。')
         cfg = load_config(args.config)

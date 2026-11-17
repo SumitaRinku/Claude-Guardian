@@ -273,6 +273,62 @@ class HistoryAndDetail(Base):
             self.assertFalse(params & reserved, name)
 
 
+class ExitScore(Base):
+    OK = {'ok': True, 'score': 88, 'label': '纯净', 'level': 'ok', 'ip': '203.0.*.*', 'log': []}
+
+    def test_check_records_result_and_log_row(self):
+        self.api._score_check = lambda: dict(self.OK)
+        self.assertIsNone(self.api.ip_result())
+        self.assertEqual(self.api.check_ip()['score'], 88)
+        self.assertEqual(self.api.ip_result()['score'], 88)
+        self.assertIn('信任分 88（纯净）', self.api.log_text())
+
+    def test_failure_is_logged(self):
+        self.api._score_check = lambda: {'ok': False, 'error': 'offline', 'log': []}
+        self.assertFalse(self.api.check_ip()['ok'])
+        self.assertIn('出口评分检测失败：offline', self.api.log_text())
+
+    def test_concurrent_click_is_busy_not_a_second_request(self):
+        started, release, calls = threading.Event(), threading.Event(), []
+
+        def slow():
+            calls.append(1)
+            started.set()
+            release.wait(2)
+            return dict(self.OK)
+        self.api._score_check = slow
+        worker = threading.Thread(target=self.api.check_ip)
+        worker.start()
+        started.wait(2)
+        self.assertEqual(self.api.check_ip(), {'busy': True})
+        release.set()
+        worker.join(2)
+        self.assertEqual(len(calls), 1)
+
+    def test_detail_page_opens_in_the_users_browser(self):
+        opened = []
+        self.api._open_url = lambda url: opened.append(url) or True
+        self.assertTrue(self.api.open_ip_detail()['ok'])
+        self.assertEqual(opened, ['https://ip.net.coffee/claude/'])
+        self.api._open_url = lambda url: False
+        self.assertFalse(self.api.open_ip_detail()['ok'])
+
+        def boom(url):
+            raise OSError('no browser')
+        self.api._open_url = boom
+        self.assertFalse(self.api.open_ip_detail()['ok'])
+
+    def test_drawer_detail_carries_source_and_evidence(self):
+        state = failing_state()
+        state['checks'][1] = dict(state['checks'][1], source='Get-NetFirewallProfile',
+                                  evidence=['Public：已启用，默认出站 允许'])
+        self.store.state = state
+        detail = self.api.detail('firewall_block')
+        self.assertEqual(detail['source'], 'Get-NetFirewallProfile')
+        self.assertEqual(detail['evidence'], ['Public：已启用，默认出站 允许'])
+        self.assertEqual(self.api.detail('proxy_core')['evidence'], [])
+
+
 class Closing(unittest.TestCase):
     """Regression: clicking the window's close button froze the panel.
 

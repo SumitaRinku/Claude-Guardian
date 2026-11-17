@@ -26,6 +26,15 @@ assert.deepEqual(panel.mergeLog(rows, {rebuild: true, rows: [{text: 'z'}]}, 10).
 assert.deepEqual(panel.mergeLog(rows, {rebuild: false, rows: [{text: 'c'}]}, 2).map(r => r.text), ['b', 'c']);
 assert.equal(rows.length, 2, 'mergeLog must not mutate its input');
 
+assert.deepEqual(panel.scoreView(null), {cls: 'unknown', value: '—', label: '未检测', ip: '', facts: null});
+assert.equal(panel.scoreView({ok: false}).label, '检测失败');
+const sv = panel.scoreView({ok: true, score: 88, label: '纯净', level: 'ok', ip: '203.0.*.*', ipv6: true,
+  facts: {location: 'Japan', network: 'AS1 X', kind: '住宅', timezone: 'Asia/Tokyo', flags: ['VPN', 'Tor']}});
+assert.equal(sv.value, '88');
+assert.equal(sv.ip, '出口 203.0.*.*（IPv6）');
+assert.equal(sv.facts.flags, 'VPN、Tor');
+assert.equal(panel.scoreView({ok: true, score: 1, label: 'x', level: 'weird', ip: '', facts: {flags: []}}).facts.flags, '无');
+
 assert.equal(panel.logLine({time: '12:00:00', kind: '状态', text: 'x'}), '12:00:00  [状态]  x');
 assert.deepEqual(Array.from(panel.base64ToBytes(Buffer.from([0, 1, 254, 255]).toString('base64'))), [0, 1, 254, 255]);
 assert.equal(panel.LOG_LIMIT, 300);

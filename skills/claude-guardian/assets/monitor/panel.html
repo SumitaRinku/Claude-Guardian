@@ -11,6 +11,7 @@
     </div>
     <nav aria-label="页面">
       <button class="nav active" data-page="status" type="button"><span>状态</span><b id="badge" class="badge" hidden></b></button>
+      <button class="nav" data-page="exit" type="button"><span>出口</span></button>
       <button class="nav" data-page="history" type="button"><span>历史</span></button>
       <button class="nav" data-page="log" type="button"><span>日志</span></button>
       <button class="nav" data-page="settings" type="button"><span>设置</span></button>
@@ -35,6 +36,34 @@
           <span id="detail" class="detail"></span>
         </div>
         <div id="cards" class="cards"></div>
+      </div>
+    </section>
+
+    <section id="page-exit" class="page">
+      <div class="inner">
+        <div id="score-card" class="panel score-card unknown">
+          <div class="score"><span id="score-value">—</span><span id="score-label" class="chip unknown">未检测</span></div>
+          <div class="score-meta">
+            <div id="score-ip" class="score-ip"></div>
+            <div id="score-time" class="subtitle"></div>
+          </div>
+          <span class="spacer"></span>
+          <button id="score-detail" class="btn" type="button">浏览器打开详情</button>
+          <button id="score-run" class="btn primary" type="button">检测</button>
+        </div>
+        <div class="exit-grid">
+          <dl id="score-facts" class="panel facts">
+            <dt>位置</dt><dd data-fact="location">—</dd>
+            <dt>网络</dt><dd data-fact="network">—</dd>
+            <dt>类型</dt><dd data-fact="kind">—</dd>
+            <dt>时区</dt><dd data-fact="timezone">—</dd>
+            <dt>标记</dt><dd data-fact="flags">—</dd>
+          </dl>
+          <div class="panel steps-log">
+            <h3>检测过程</h3>
+            <ol id="score-log" class="evidence"><li class="muted">点“检测”后向 1.1.1.1 和 ip.net.coffee 各发一次请求</li></ol>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -93,6 +122,9 @@
       </div>
       <p id="drawer-checks" class="drawer-checks"></p>
       <ol id="drawer-steps" class="steps"></ol>
+      <h3>检测过程</h3>
+      <p id="drawer-source" class="source"></p>
+      <ul id="drawer-evidence" class="evidence"></ul>
       <h3>最近 24 小时</h3>
       <div id="drawer-bar" class="bar"></div>
       <div class="drawer-foot"><span id="drawer-changed"></span><code id="drawer-code"></code></div>

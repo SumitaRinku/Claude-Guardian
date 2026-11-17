@@ -860,6 +860,7 @@ def run(cfg, config_path, tray=False, start_hidden=False):
         stamp = state.get('checked_at')
         rendered['stamp'] = stamp or 0
         rows_now = build_rows(state)
+        rendered['raw'] = {item.get('id'): item for item in state.get('checks', [])}
         flagged = problems(rows_now)
         headline, detail = banner_text(value, stamp, rows_now)
         banner.set(value if stamp else 'unknown', headline, detail)
@@ -914,6 +915,16 @@ def run(cfg, config_path, tray=False, start_hidden=False):
             tk.Label(dialog, text='%d. %s' % (index, step.replace('`', '')), bg=PALETTE['card'],
                      fg=PALETTE['ink'], font=(ui, 10), wraplength=px(380), justify='left').pack(
                 anchor='w', padx=px(24), pady=(px(8) if index == 1 else px(3), 0))
+        raw = rendered.get('raw', {}).get(check_id, {})
+        if raw.get('evidence'):
+            tk.Label(dialog, text='检测过程', bg=PALETTE['card'], fg=PALETTE['muted'],
+                     font=(ui, 9, 'bold')).pack(anchor='w', padx=px(24), pady=(px(14), px(2)))
+            if raw.get('source'):
+                tk.Label(dialog, text='数据来源：' + raw['source'], bg=PALETTE['card'], fg=PALETTE['faint'],
+                         font=(mono, 8)).pack(anchor='w', padx=px(24))
+            for line in raw['evidence']:
+                tk.Label(dialog, text=line, bg=PALETTE['card'], fg=PALETTE['ink'], font=(ui, 9),
+                         wraplength=px(380), justify='left').pack(anchor='w', padx=px(24))
         tk.Label(dialog, text=code, bg=PALETTE['card'], fg=PALETTE['faint'], font=(mono, 8)).pack(
             anchor='w', padx=px(24), pady=(px(12), 0))
         button(dialog, '关闭', dialog.destroy).pack(anchor='e', padx=px(20), pady=px(16))

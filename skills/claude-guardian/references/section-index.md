@@ -325,7 +325,7 @@ macOS DNS、IPv6 与 WebRTC：单机经验的通用提炼（8 节）
 
 ## monitor.md
 
-实时监测与通知（本机只读面板）（12 节）
+实时监测与通知（本机只读面板）（14 节）
 
 - [用途与边界](monitor.md#用途与边界)
 - [支持范围](monitor.md#支持范围)
@@ -337,6 +337,8 @@ macOS DNS、IPv6 与 WebRTC：单机经验的通用提炼（8 节）
 - [检查项与判定](monitor.md#检查项与判定)
 - [通知](monitor.md#通知)
 - [故障时怎么办](monitor.md#故障时怎么办)
+- [检测原理与检测日志](monitor.md#检测原理与检测日志)
+- [出口评分（联网，手动）](monitor.md#出口评分联网手动)
 - [不做的事](monitor.md#不做的事)
 - [验证与已知限制](monitor.md#验证与已知限制)
 

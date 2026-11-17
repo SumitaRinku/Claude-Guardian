@@ -132,8 +132,8 @@ class Guide(unittest.TestCase):
     def test_every_failure_code_the_engine_emits_has_steps(self):
         source = (ROOT / 'skills/claude-guardian/scripts/monitor.py').read_text(encoding='utf-8')
         import re
-        emitted = set(re.findall(r"add\('\w+', '(?:fail|degraded)', '([A-Z0-9_]+)'\)", source))
-        self.assertTrue(emitted)
+        emitted = set(re.findall(r"add\('\w+', '(?:fail|degraded)', '([A-Z0-9_]+)'", source))
+        self.assertGreaterEqual(len(emitted), 12)
         self.assertLessEqual(emitted, set(guide.STEPS))
 
     def test_ok_has_no_steps_and_unknown_codes_fall_back(self):

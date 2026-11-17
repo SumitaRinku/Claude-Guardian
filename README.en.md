@@ -6,7 +6,7 @@
 
 **A read-only Windows status panel for your proxy, TUN, route, firewall, DNS and IPv6.**
 
-No outbound requests · No system changes · No admin rights · No background service
+Monitoring stays offline · Exit score on demand · No system changes · No admin rights
 
 <p>
   <img alt="Windows 10/11" src="https://img.shields.io/badge/Windows-10%2F11-0078D4?style=flat-square">
@@ -27,7 +27,7 @@ No outbound requests · No system changes · No admin rights · No background se
 
 CCGuard is the Windows read-only status panel maintained in this repository on top of [Claude-Guardian](https://github.com/DUNHKpcc/Claude-Guardian). It is for a machine where the proxy, TUN and firewall are already deployed, and answers one question continuously: **is the protection still in place?**
 
-It splits the state into 10 checks and shows them in green / orange / red / grey in a window, a tray icon and an optional local web page; it raises a system notification when a key check fails. The monitor does not change the firewall, restart the proxy, edit the configuration or make any outbound request, so it is safe to leave running.
+It splits the state into 10 checks and shows them in green / orange / red / grey in a window, a tray icon and an optional local web page; it raises a system notification when a key check fails. The monitor does not change the firewall, restart the proxy or edit the configuration, and the 10 checks make no outbound request, so it is safe to leave running; when you want to know how clean the exit IP is, run the exit score by hand.
 
 > A passing monitor only means the local state matches the expected configuration. It does not certify egress IP, DNS, accounts or platform acceptance, and it does not guarantee avoiding bans.
 
@@ -44,6 +44,8 @@ It splits the state into 10 checks and shows them in green / orange / red / grey
 | **New UI** | WebView desktop panel (pywebview + Edge WebView2): status banner, sidebar problem count, coloured log, follows system dark mode, window sized to its content; falls back to the tkinter panel when pywebview is missing |
 | **State history** | 24-hour / 7-day timeline per check, with unmonitored time shown separately; stored in `history.jsonl` next to the config, check ids and states only, kept for 7 days |
 | **Fix guidance** | Click any check card to see what it checks, the steps for the current result, its last 24 hours and the result code |
+| **Detection log** | Every check records which system query it read, what it saw and why it reached its state; listed under "检测过程" in the card detail, without IP addresses or file paths. See [how checks work](skills/claude-guardian/references/monitor.md#principles) |
+| **Exit score** | On the "出口" page, on demand: ask Cloudflare for the exit IP over the current network, then fetch its trust score, IP type, location, network and risk flags from [ip.net.coffee](https://ip.net.coffee/claude/), with every request listed; open the full report in your browser with one click. Never contacts Claude; see [exit score](skills/claude-guardian/references/monitor.md#exit-score) |
 | **Window + tray + web** | WebView panel (default) / tkinter panel (fallback), tray notifications, local `127.0.0.1` web page as an alternative |
 | **System notifications** | Alerts on state transitions with cooldown and recovery notices; can be paused |
 | **Optional autostart** | A per-user Startup shortcut opens the panel hidden in the tray at login; off by default |
@@ -55,7 +57,8 @@ It splits the state into 10 checks and shows them in green / orange / red / grey
 ## Safety boundaries
 
 - **Read-only**: no `Set-*`, no firewall/route/proxy changes, no core restart.
-- **No outbound traffic**: no IP, DNS-leak, latency or WebRTC probes; the web mode only listens on `127.0.0.1`.
+- **Monitoring makes no outbound traffic**: the 10 checks only read the local machine; no DNS-leak, latency or WebRTC probes; the web mode only listens on `127.0.0.1`.
+- **The exit score goes online only when you click it**: it requests `1.1.1.1/cdn-cgi/trace` and `ip.net.coffee/api/iprisk` only, never claude.ai or anthropic.com; the exit IP is sent to ip.net.coffee and the UI shows only its first two parts. You open the full acceptance page in your own browser.
 - **No admin rights**: the monitor runs as a normal user; elevation belongs to other protection scripts.
 - **No autostart by default**: no Windows service or scheduled task, and no Startup entry unless you explicitly enable autostart. Enabling creates one CCGuard shortcut in the current user's Startup folder and can be undone at any time.
 - **No credentials**: notifications and state contain only state names and check IDs, never IPs, paths, nodes, subscription links or config values.
@@ -76,7 +79,7 @@ The monitor uses only the Python standard library; no third-party dependency is 
 
 **Option A: release package (recommended; double-click and go)**
 
-Download [`claude-guardian-0.3.0.zip`](https://github.com/SumitaRinku/CCguard/releases/download/v0.3.0/claude-guardian-0.3.0.zip), extract it, and double-click `CCGuard.pyw` or `CCGuard.cmd` inside `claude-guardian\`.
+Download [`claude-guardian-0.4.0.zip`](https://github.com/SumitaRinku/CCguard/releases/download/v0.4.0/claude-guardian-0.4.0.zip), extract it, and double-click `CCGuard.pyw` or `CCGuard.cmd` inside `claude-guardian\`.
 
 **Option B: clone the repository (latest source)**
 
@@ -157,8 +160,11 @@ The left sidebar also has an "autostart" checkbox with the same effect. It is of
 Other entries:
 
 ```bat
-:: one collection, JSON output
+:: one collection, JSON output (each check carries its source and evidence)
 python ...\monitor.py check --config <private>\monitor.json
+
+:: exit score (online: Cloudflare trace + ip.net.coffee, never Claude; no config needed)
+python ...\monitor.py ip-score
 
 :: local web page (listens on 127.0.0.1 only, random session token)
 python ...\monitor.py serve --config <private>\monitor.json
@@ -324,7 +330,7 @@ python tools/package_skill.py --output <new.zip>
 ```
 
 - CI runs on Linux, macOS, Windows and Python 3.10 Linux; `tools/ci_scope.py` distinguishes docs-only from code pushes.
-- Latest release `v0.3.0`; it includes double-click start, quickstart, autostart and the UI improvements. See [CHANGELOG.md](CHANGELOG.md) for the full record and [docs/decisions.md](docs/decisions.md) for design trade-offs.
+- Latest release `v0.4.0`; it includes the WebView UI, CJK fonts, state history, fix guidance, detection logs, the exit score and the close-freeze fix. See [CHANGELOG.md](CHANGELOG.md) for the full record and [docs/decisions.md](docs/decisions.md) for design trade-offs.
 
 ## The full Claude-Guardian Skill
 
@@ -374,6 +380,7 @@ See [authorization tiers](skills/claude-guardian/references/authorization-tiers.
 | Start here | Contents |
 | --- | --- |
 | [Monitor reference](skills/claude-guardian/references/monitor.md) | Configuration, client presets, checks, notifications and boundaries |
+| [How checks work](skills/claude-guardian/references/monitor.md#principles) | Data source, rule and detection log for every check; requests and privacy of the exit score |
 | [Script index](skills/claude-guardian/references/scripts-index.md) | Monitor and Claude-Guardian script entries |
 | [Decision log](docs/decisions.md) | ADRs and implementation trade-offs |
 | [Changelog](CHANGELOG.md) | What changed per version, verification and rollback |

@@ -542,6 +542,56 @@ class Output(unittest.TestCase):
             self.assertEqual({check['id'] for check in state['checks']}, set(m.CHECK_IDS))
 
 
+class Evidence(unittest.TestCase):
+    """Every check says what it read and why: shown as the detection log in the panel."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cfg = config(Path(self.tmp.name))
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def by_id(self, raw, core=None):
+        return {check['id']: check for check in m.evaluate(self.cfg, raw, core or CORE_OK)}
+
+    def test_every_check_has_a_source_and_evidence(self):
+        for raw in (raw_state(), {}, None, raw_state(processes=['explorer'], routes=[])):
+            for check in m.evaluate(self.cfg, raw, CORE_OK if raw else m._empty_core()):
+                self.assertEqual(check['source'], m.SOURCES[check['id']])
+                self.assertTrue(check['evidence'], check['id'])
+                self.assertTrue(all(isinstance(line, str) and line for line in check['evidence']))
+
+    def test_evidence_explains_the_decision(self):
+        checks = self.by_id(raw_state(processes=['explorer']))
+        self.assertIn('没有找到其中任何一个', checks['proxy_core']['evidence'])
+        ok = self.by_id(raw_state())
+        self.assertTrue(any(line.startswith('正在运行：') for line in ok['proxy_core']['evidence']))
+        self.assertTrue(any('状态 Up' in line for line in ok['tun_adapter']['evidence']))
+        self.assertTrue(any('默认出站 阻止' in line for line in ok['firewall_block']['evidence']))
+        self.assertTrue(any('下限' in line for line in ok['guardian_rules']['evidence']))
+
+    def test_evidence_never_carries_addresses_or_paths(self):
+        cfg_path = self.cfg['proxy'].get('runtime_config', '')
+        for raw in (raw_state(), raw_state(dns=[{'InterfaceAlias': 'Ethernet', 'ServerAddresses': ['10.9.8.7']}])):
+            body = json.dumps(m.evaluate(self.cfg, raw, CORE_OK), ensure_ascii=False)
+            self.assertIsNone(re.search(r'\b\d{1,3}(\.\d{1,3}){3}\b', body))
+            if cfg_path:
+                self.assertNotIn(cfg_path, body)
+            self.assertNotIn(':\\', body)
+
+    def test_collector_failure_still_has_evidence(self):
+        class Broken:
+            def collect(self):
+                raise RuntimeError('boom')
+        with tempfile.TemporaryDirectory() as folder:
+            store = m.Store(self.cfg, Path(folder) / 'state.json', providers=Broken())
+            state = store.refresh()
+        for check in state['checks']:
+            self.assertEqual(check['code'], 'COLLECTOR_FAILED')
+            self.assertEqual(check['evidence'], ['本次采集出错'])
+
+
 class RecordingRunner:
     """Stands in for subprocess.run; records argv and returns a fixed JSON reply."""
     def __init__(self, reply, returncode=0):

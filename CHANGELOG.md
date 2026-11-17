@@ -1,5 +1,14 @@
 # 版本记录
 
+## 出口评分与检测日志（2026-11-17，MONITOR-SCORE-20261117，ADR-082）
+
+- 出口评分：新增 `scripts/ip_score.py`、面板“出口”页和 `monitor.py ip-score`。只在用户点击时联网，先向 `https://1.1.1.1/cdn-cgi/trace` 取 Cloudflare 看到的出口 IP，再向 `https://ip.net.coffee/api/iprisk/<IP>` 取信任分、IP 类型、地区、运营商、时区和 VPN／代理／Tor／滥用标记；分段与受限地区记 0 分的规则和 https://ip.net.coffee/claude/ 页面一致。两个请求都不访问 claude.ai 或 anthropic.com；完整验收页只通过“浏览器打开详情”在用户自己的默认浏览器里打开。界面、日志和命令行输出只显示 IP 前两段，结果只在内存里，不进历史文件；并发点击不会重复请求
+- 检测日志：`monitor.evaluate` 为每项检查记录 `source`（读取的系统查询或运行配置）和 `evidence`（读到什么、为什么判成这个状态），在卡片详情的“检测过程”、tkinter 说明窗口和 `check` 的 JSON 里显示；采集出错时也有记录。日志只含进程名、网卡名、配置文件名、数量和结论，不含 IP 地址和文件路径，沿用状态输出不带地址和路径的测试
+- 文档：`monitor.md` 新增“检测原理与检测日志”（每项检查的数据来源、判定、日志内容）和“出口评分（联网，手动）”（请求、发出的数据、与浏览器验收页的差别）；“用途与边界”和“不做的事”改为“监测不联网，出口评分手动触发”；README 中英文同步能力表、安全边界、命令与文档索引
+- 测试：新增 `tests/test_ip_score.py`（成功、受限地区、IPv6、九种失败、完整 IP 不出现在结果里、只联系 Cloudflare 和 ip.net.coffee、CLI 退出码）；`test_monitor.py` 新增检测日志覆盖、解释力与不含地址路径；`test_monitor_webview.py` 新增出口评分记录、失败日志、并发点击、浏览器打开与详情证据；`tests/monitor-panel.cjs` 新增出口页数据转换
+- 验证：Windows 11 本机 `python -m unittest discover -s tests` 1785 项通过（442 项 POSIX 专属跳过）；`node tests/monitor-panel.cjs`、`tests/monitor-interaction.cjs`、`tests/webrtc-lifecycle.cjs` 与 `compileall` 通过；`package_skill.py` 两次打包字节一致，含 `ip_score.py`。真实数据端到端：用本机配置副本启动 WebView 面板，真实只读采集的检测过程与实际进程、网卡一致；在面板里点“检测”实际请求 Cloudflare 与 ip.net.coffee，0.7 秒返回 100 分（极度纯净，住宅），界面只显示 IP 前两段。“浏览器打开详情”只用替身验证调用参数，未在真实浏览器点开（not_run）；浅色模式未验收（not_run）
+- 风险与回滚：出口评分依赖 ip.net.coffee 的公开接口，接口变化时显示“检测失败”而不影响监测；评的是 Cloudflare 看到的出口，代理规则让 claude.ai 走不同节点时与浏览器页的 Claude 出口可能不同。回滚使用普通 revert
+
 ## 修复：关闭 WebView 面板时窗口卡死（2026-11-17，MONITOR-CLOSE-20261117）
 
 - 现象：点窗口右上角关闭后面板无响应，结束进程后托盘一直显示“监测已停止更新”

@@ -36,10 +36,11 @@
 
 | 脚本 | 类型 | 用途 | 说明 |
 | --- | --- | --- | --- |
-| `monitor.py` | 入口 | 只读本机监测：`quickstart` 一键生成配置、`detect` 候选识别、`check` 单次 JSON、`gui` 独立窗口、`serve` 本地网页、`desktop` 生成入口、`autostart-*` 可选开机自启；支持 FlClash／Clash Verge Rev／Mihomo／sing-box／Hiddify／v2rayN／NekoRay 等预设与 Clash／sing-box／Xray 配置；不联网、不改系统 | [monitor.md](monitor.md) |
+| `monitor.py` | 入口 | 只读本机监测：`quickstart` 一键生成配置、`detect` 候选识别、`check` 单次 JSON、`gui` 独立窗口、`serve` 本地网页、`desktop` 生成入口、`autostart-*` 可选开机自启、`ip-score` 手动出口评分；支持 FlClash／Clash Verge Rev／Mihomo／sing-box／Hiddify／v2rayN／NekoRay 等预设与 Clash／sing-box／Xray 配置；监测不联网、不改系统 | [monitor.md](monitor.md) |
 | `monitor_webview.py` | 入口／库 | 默认 WebView 面板（pywebview + Edge WebView2）：JS 桥接 `PanelApi`、托盘与单实例、不可用时回退 tkinter；纯逻辑可离线测试 | 同上 |
 | `monitor_history.py` | 库 | 状态历史：配置旁 `history.jsonl` 的写入、7 天保留和时间线分段 | 同上 |
 | `monitor_guide.py` | 库 | 各检查项检查什么，以及每个结果代码的处理步骤 | 同上 |
+| `ip_score.py` | 库 | 手动出口评分：Cloudflare trace 取出口 IP，ip.net.coffee 取信任分；不访问 Claude，结果只留打码 IP | [monitor.md](monitor.md#exit-score) |
 | `monitor_gui.py` | 入口／库 | tkinter 回退面板与共享逻辑：中文优先字体、摘要横幅、状态卡片、彩色日志、设置、开机自启开关；纯逻辑可离线测试 | 同上 |
 
 双击入口：发布包与仓库根目录的 `CCGuard.pyw`（无控制台）和 `CCGuard.cmd`（回退启动器），首次双击调用 `quickstart`。

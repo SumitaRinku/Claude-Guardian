@@ -4,7 +4,7 @@
 const LOG_LIMIT = 300;
 const STATES = ['ok', 'degraded', 'fail', 'unknown'];
 const STATE_TEXT = { ok: '正常', degraded: '降级', fail: '失效', unknown: '未知' };
-const PAGES = ['status', 'history', 'log', 'settings'];
+const PAGES = ['status', 'exit', 'history', 'log', 'settings'];
 const DESIGN_WIDTH = 900;
 
 function stateClass(value) {
@@ -46,6 +46,15 @@ function barBlocks(segments, now, window) {
 // Text with `code` spans -> [{code: bool, text}].
 function codeParts(text) {
   return String(text).split('`').map((part, index) => ({ code: index % 2 === 1, text: part })).filter(p => p.text);
+}
+
+// Exit score result -> what the exit page shows.
+function scoreView(result) {
+  if (!result) return { cls: 'unknown', value: '—', label: '未检测', ip: '', facts: null };
+  if (!result.ok) return { cls: 'unknown', value: '—', label: '检测失败', ip: '', facts: null };
+  const facts = Object.assign({}, result.facts, { flags: (result.facts.flags || []).join('、') || '无' });
+  return { cls: stateClass(result.level), value: String(result.score), label: result.label,
+           ip: '出口 ' + result.ip + (result.ipv6 ? '（IPv6）' : ''), facts };
 }
 
 function mergeLog(rows, delta, limit) {
@@ -99,6 +108,7 @@ function bind() {
       historyTimer = setInterval(loadHistory, 30000);
     }
     if (page === 'settings') loadSettings();
+    if (page === 'exit') api().ip_result().then(renderScore);
     if (page === 'log') scrollLog();
   }
 
@@ -162,6 +172,14 @@ function bind() {
     }
     steps.hidden = !detail.steps.length;
     fillBar($('drawer-bar'), detail.segments, detail.now, detail.window);
+    $('drawer-source').textContent = detail.source ? '数据来源：' + detail.source : '';
+    const evidence = $('drawer-evidence');
+    evidence.textContent = '';
+    for (const line of detail.evidence || []) {
+      const item = document.createElement('li');
+      item.textContent = line;
+      evidence.append(item);
+    }
     $('drawer-changed').textContent = detail.changed_at ? '最近变化 ' + clock(detail.changed_at, true) : '';
     $('drawer-code').textContent = detail.code;
     $('drawer').hidden = false;
@@ -172,6 +190,46 @@ function bind() {
     openCheck = null;
     $('drawer').hidden = true;
     for (const node of Object.values(cards)) node.classList.remove('selected');
+  }
+
+  function renderScore(result) {
+    const view = scoreView(result);
+    $('score-card').className = 'panel score-card ' + view.cls;
+    $('score-value').textContent = view.value;
+    $('score-label').className = 'chip ' + view.cls;
+    $('score-label').textContent = view.label;
+    $('score-ip').textContent = view.ip;
+    $('score-time').textContent = result ? '检测于 ' + clock(result.checked_at) : '';
+    for (const node of document.querySelectorAll('[data-fact]')) {
+      node.textContent = view.facts ? (view.facts[node.dataset.fact] || '—') : '—';
+    }
+    if (!result) return;
+    const log = $('score-log');
+    log.textContent = '';
+    for (const line of result.log) {
+      const item = document.createElement('li');
+      if (line.ok === true) item.className = 'good';
+      if (line.ok === false) item.className = 'bad';
+      const time = document.createElement('time');
+      time.textContent = line.time;
+      item.append(time, line.text);
+      log.append(item);
+    }
+  }
+
+  async function runScore() {
+    const button = $('score-run');
+    button.disabled = true;
+    button.textContent = '检测中…';
+    $('score-card').classList.add('busy');
+    try {
+      const result = await api().check_ip();
+      if (!result.busy) renderScore(result);
+    } finally {
+      button.disabled = false;
+      button.textContent = '检测';
+      $('score-card').classList.remove('busy');
+    }
   }
 
   async function loadHistory() {
@@ -316,6 +374,8 @@ function bind() {
     };
   }
   $('refresh').onclick = () => act(api().refresh());
+  $('score-run').onclick = runScore;
+  $('score-detail').onclick = () => act(api().open_ip_detail());
   $('drawer-close').onclick = closeDrawer;
   $('settings').onsubmit = event => { event.preventDefault(); act(api().apply(form(), false)); };
   $('save').onclick = () => act(api().apply(form(), true));
@@ -349,7 +409,7 @@ function bind() {
   document.addEventListener('keydown', event => {
     if (event.key === 'F5') { event.preventDefault(); act(api().refresh()); }
     if (event.key === 'Escape' && openCheck) closeDrawer();
-    if (event.ctrlKey && ['1', '2', '3', '4'].includes(event.key)) {
+    if (event.ctrlKey && ['1', '2', '3', '4', '5'].includes(event.key)) {
       event.preventDefault();
       select(PAGES[Number(event.key) - 1]);
     }
@@ -358,7 +418,7 @@ function bind() {
     if (!event.target.closest('.log, .drawer, input')) event.preventDefault();
   });
 
-  window.CCGuard = { askClose, select, openDrawer, closeDrawer };
+  window.CCGuard = { askClose, select, openDrawer, closeDrawer, renderScore };
 
   (async () => {
     try {
@@ -373,7 +433,7 @@ function bind() {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { stateClass, subtitleText, barBlocks, codeParts, clock, mergeLog, logLine, base64ToBytes, LOG_LIMIT };
+  module.exports = { stateClass, subtitleText, barBlocks, codeParts, clock, scoreView, mergeLog, logLine, base64ToBytes, LOG_LIMIT };
 } else if (typeof window !== 'undefined') {
   if (window.pywebview && window.pywebview.api) bind();
   else window.addEventListener('pywebviewready', bind, { once: true });

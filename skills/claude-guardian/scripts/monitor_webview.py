@@ -14,6 +14,7 @@ import time
 
 import monitor as engine
 import monitor_gui as shared
+import ip_score
 import monitor_guide
 import monitor_history
 
@@ -121,8 +122,13 @@ class PanelApi:
     """Methods the page calls. Everything else is private so pywebview does not expose it."""
 
     def __init__(self, cfg, config_path, store, tray_alive=lambda: False, autostart=None,
-                 open_file=None, clock=time.time, history=None, screen=None):
+                 open_file=None, clock=time.time, history=None, screen=None,
+                 score_check=None, open_url=None):
         self._cfg = cfg
+        self._score_check = score_check or ip_score.check
+        self._open_url = open_url
+        self._ip = None
+        self._ip_lock = threading.Lock()
         self._history = history
         self._screen = screen
         self._config_path = Path(config_path)
@@ -203,11 +209,14 @@ class PanelApi:
         """Card detail: what is checked, what to do now, and the last 24 hours of this check."""
         if check_id not in engine.CHECK_IDS:
             return None
-        row = next((item for item in shared.build_rows(self._store.read()) if item['id'] == check_id),
+        state = self._store.read()
+        row = next((item for item in shared.build_rows(state) if item['id'] == check_id),
                    {'id': check_id, 'label': shared.LABELS[check_id], 'state': 'unknown', 'code': '—'})
+        raw = next((item for item in state.get('checks', []) if item.get('id') == check_id), {})
         records = self._records(DAY)
         now = self._clock()
         return dict(row_view(row), **monitor_guide.guide(check_id, row['state'], row['code']),
+                    source=raw.get('source', ''), evidence=list(raw.get('evidence') or []),
                     now=now, window=DAY,
                     segments=monitor_history.timeline(records, now, DAY, [check_id])[check_id],
                     changed_at=monitor_history.last_change(records, check_id))
@@ -234,6 +243,38 @@ class PanelApi:
         except Exception:
             return {'ok': False}
         return {'ok': True, 'width': width, 'height': height}
+
+    def check_ip(self):
+        """Exit IP trust score, only on the user's click (two requests, neither to Claude)."""
+        if not self._ip_lock.acquire(blocking=False):
+            return {'busy': True}
+        try:
+            result = self._score_check()
+        finally:
+            self._ip_lock.release()
+        self._ip = result
+        if result.get('ok'):
+            self._note('出口', '信任分 %s（%s）' % (result['score'], result['label']), result['level'])
+        else:
+            self._note('出口', '出口评分检测失败：' + str(result.get('error')), 'unknown')
+        return result
+
+    def ip_result(self):
+        return self._ip
+
+    def open_ip_detail(self):
+        """Open the full check in the user's own browser; the panel never loads that page."""
+        opener = self._open_url
+        if opener is None:
+            import webbrowser
+            opener = webbrowser.open
+        try:
+            opened = opener(ip_score.DETAIL_URL)
+        except Exception:
+            opened = False
+        if opened is False:
+            return {'ok': False, 'message': '无法打开浏览器：' + ip_score.DETAIL_URL}
+        return {'ok': True, 'message': '已在浏览器打开详情'}
 
     def settings(self):
         alerts = self._cfg['alerts']
