@@ -61,9 +61,12 @@ class InstallerAgreesWithTheApp(unittest.TestCase):
     def test_uninstall_removes_the_autostart_entry(self):
         self.assertIn(r'Name: "{userstartup}\%s.lnk"' % monitor.APP_NAME, ISS)
 
-    def test_chinese_and_english_wizard(self):
-        self.assertIn('ChineseSimplified.isl', ISS)
-        self.assertIn('compiler:Default.isl', ISS)
+    def test_english_wizard_always_chinese_when_available(self):
+        # Regression: the runner's Inno Setup has no ChineseSimplified.isl and the build failed.
+        self.assertIn('Name: "english"; MessagesFile: "compiler:Default.isl"', ISS)
+        guard = ISS.index('#if FileExists(AddBackslash(CompilerPath) + "Languages\ChineseSimplified.isl")')
+        self.assertLess(guard, ISS.index('Name: "chinesesimplified"'))
+        self.assertLess(ISS.index('Name: "chinesesimplified"'), ISS.index('#endif', guard))
 
 
 class Bundle(unittest.TestCase):

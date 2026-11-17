@@ -43,7 +43,11 @@ VersionInfoProductName=CCGuard
 VersionInfoDescription=CCGuard Setup
 
 [Languages]
+; ChineseSimplified.isl is an unofficial Inno Setup translation that standard installs do not ship;
+; use it when the compiler has it, otherwise the wizard is English (the app itself is Chinese).
+#if FileExists(AddBackslash(CompilerPath) + "Languages\ChineseSimplified.isl")
 Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+#endif
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
