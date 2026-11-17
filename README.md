@@ -67,19 +67,25 @@ CCGuard 是本仓库在 [Claude-Guardian](https://github.com/DUNHKpcc/Claude-Gua
 ### 1. 准备
 
 - Windows 10 / 11，PowerShell 5.1
-- Python 3.10+（官方安装包通常自带 tkinter）
-- 可选：`python -m pip install -r requirements-desktop.txt` 安装 pywebview，获得 WebView 新界面（Windows 10/11 自带 Edge WebView2）；不装也能用，自动回退 tkinter 面板
+- 用安装程序时不需要 Python；用 Release 包或源码时需要 Python 3.10+（官方安装包通常自带 tkinter）
+- 可选（仅 Release 包与源码）：`python -m pip install -r requirements-desktop.txt` 安装 pywebview，获得 WebView 新界面（Windows 10/11 自带 Edge WebView2）；不装也能用，自动回退 tkinter 面板
 - 代理客户端已经在运行，TUN 和防火墙已按你的方案部署
 
 监测面板只用 Python 标准库，不需要安装第三方依赖。
 
 ### 2. 获取
 
-**方式 A：Release 包（推荐，双击即用）**
+**方式 A：安装程序（推荐）**
 
-下载 [`claude-guardian-0.4.0.zip`](https://github.com/SumitaRinku/CCguard/releases/download/v0.4.0/claude-guardian-0.4.0.zip)，解压后得到 `claude-guardian\` 目录。双击其中的 `CCGuard.pyw` 或 `CCGuard.cmd` 即可。
+下载 [`CCGuard-Setup-0.5.0.exe`](https://github.com/SumitaRinku/CCguard/releases/download/v0.5.0/CCGuard-Setup-0.5.0.exe)，双击安装。不需要 Python，也不需要管理员：程序装到当前用户的 `%LOCALAPPDATA%\Programs\CCGuard`，带开始菜单和桌面图标，可在“设置 → 应用 → 已安装的应用”里卸载。卸载会删掉程序、快捷方式和开机自启项，保留你的 `monitor.json` 与 `history.jsonl`。
 
-**方式 B：克隆仓库（最新源码）**
+安装程序在 GitHub Actions 上从源码构建，安装、自检、卸载验证通过后才附到 Release，同目录的 `SHA256SUMS-installer-0.5.0.txt` 可核对哈希。安装程序没有代码签名，首次运行时 Windows SmartScreen 可能提示“Windows 已保护你的电脑”，点“更多信息 → 仍要运行”即可。
+
+**方式 B：Release 包（Python 版，双击即用）**
+
+下载 [`claude-guardian-0.5.0.zip`](https://github.com/SumitaRinku/CCguard/releases/download/v0.5.0/claude-guardian-0.5.0.zip)，解压后得到 `claude-guardian\` 目录。双击其中的 `CCGuard.pyw` 或 `CCGuard.cmd` 即可。
+
+**方式 C：克隆仓库（最新源码）**
 
 ```powershell
 git clone https://github.com/SumitaRinku/CCguard.git
@@ -87,9 +93,9 @@ git clone https://github.com/SumitaRinku/CCguard.git
 
 仓库根目录也可以直接双击 `CCGuard.pyw` / `CCGuard.cmd`；监测入口是 `skills\claude-guardian\scripts\monitor.py`。
 
-### 3. 双击启动（推荐）
+### 3. 双击启动
 
-解压 Release 包后，进入 `claude-guardian\`，双击：
+用安装程序的，从开始菜单或桌面打开 CCGuard 即可。用 Release 包的，解压后，进入 `claude-guardian\`，双击：
 
 - `CCGuard.pyw`：无控制台，推荐；需要 `.pyw` 关联到 Python。
 - `CCGuard.cmd`：找不到 `pythonw` / `pyw` 时回退到 `python` / `py`；会短暂闪一下控制台。
@@ -307,6 +313,8 @@ skills/claude-guardian/
   SKILL.md                     Claude-Guardian Skill 入口
   scripts/monitor.py           CCGuard 监测入口
   scripts/monitor_webview.py   WebView 面板（pywebview 桥接，默认）
+packaging/                     CCGuard.exe 入口、PyInstaller 配置与 Inno Setup 安装脚本
+tools/build_windows.py         构建 exe 与安装程序（CI 同一脚本）
   scripts/monitor_history.py   状态历史（history.jsonl）与时间线
   scripts/monitor_guide.py     各检查项的说明与处理步骤
   scripts/monitor_gui.py       tkinter 面板（回退）
@@ -328,7 +336,7 @@ python tools/package_skill.py --output <new.zip>
 ```
 
 - CI 在 Linux、macOS、Windows 与 Python 3.10 Linux 上运行；`tools/ci_scope.py` 区分文档与代码推送。
-- 最新发布 `v0.4.0`；包含 WebView 新界面、中文字体、状态历史、处理指引、检测日志、出口评分与关闭卡死修复。完整记录见 [CHANGELOG.md](CHANGELOG.md)，设计取舍见 [docs/decisions.md](docs/decisions.md)。
+- 最新发布 `v0.5.0`：新增 Windows 安装程序（不需要 Python）与出口页来源说明；`v0.4.0` 起包含 WebView 新界面、中文字体、状态历史、处理指引、检测日志与出口评分。完整记录见 [CHANGELOG.md](CHANGELOG.md)，设计取舍见 [docs/decisions.md](docs/decisions.md)。
 
 ## 完整 Claude-Guardian Skill
 
@@ -388,6 +396,13 @@ git clone https://github.com/SumitaRinku/CCguard.git Claude-Guardian
 ## 反馈
 
 欢迎通过 [Issues](https://github.com/SumitaRinku/CCguard/issues) 反馈问题。请说明 Windows 版本、代理客户端与版本、复现步骤和预期结果；账号、凭据、订阅链接和完整配置不要贴出来。真机反馈可参考 [device-report.yml](.github/ISSUE_TEMPLATE/device-report.yml)。
+
+## 数据来源与致谢
+
+- **出口评分**的信任分、IP 类型、地区、运营商与风险标记来自 [ip.net.coffee](https://ip.net.coffee/claude/) 的公开接口，评分分段和受限地区规则与其 Claude IP 检测页一致；完整检测页（含 Claude 出口 IP、DNS 与 WebRTC 泄露）请在浏览器里打开该网站查看。
+- **出口 IP** 由 Cloudflare 的 `1.1.1.1/cdn-cgi/trace` 返回。
+- 两项服务都由第三方提供，CCGuard 只在你点击“检测”时请求它们；服务调整时出口评分会显示“检测失败”，不影响本机监测。
+- 项目基于 [Claude-Guardian](https://github.com/DUNHKpcc/Claude-Guardian) 维护。
 
 ## 许可
 

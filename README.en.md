@@ -79,7 +79,9 @@ The monitor uses only the Python standard library; no third-party dependency is 
 
 **Option A: release package (recommended; double-click and go)**
 
-Download [`claude-guardian-0.4.0.zip`](https://github.com/SumitaRinku/CCguard/releases/download/v0.4.0/claude-guardian-0.4.0.zip), extract it, and double-click `CCGuard.pyw` or `CCGuard.cmd` inside `claude-guardian\`.
+Recommended: download [`CCGuard-Setup-0.5.0.exe`](https://github.com/SumitaRinku/CCguard/releases/download/v0.5.0/CCGuard-Setup-0.5.0.exe) and run it. It needs neither Python nor administrator rights: it installs for the current user into `%LOCALAPPDATA%\Programs\CCGuard` with Start menu and desktop shortcuts, and can be removed from Settings > Apps. Uninstalling removes the program, its shortcuts and the autostart entry, and keeps your `monitor.json` and `history.jsonl`. The installer is built from source on GitHub Actions and attached to the release only after a silent install, self-test and uninstall pass; `SHA256SUMS-installer-0.5.0.txt` holds its hash. It is not code-signed, so SmartScreen may show "Windows protected your PC" on first run: choose "More info > Run anyway".
+
+Python package: download [`claude-guardian-0.5.0.zip`](https://github.com/SumitaRinku/CCguard/releases/download/v0.5.0/claude-guardian-0.5.0.zip), extract it, and double-click `CCGuard.pyw` or `CCGuard.cmd` inside `claude-guardian\`.
 
 **Option B: clone the repository (latest source)**
 
@@ -309,6 +311,8 @@ skills/claude-guardian/
   SKILL.md                     Claude-Guardian Skill entry
   scripts/monitor.py           CCGuard monitor entry
   scripts/monitor_webview.py   WebView panel (pywebview bridge, default)
+packaging/                     CCGuard.exe entry, PyInstaller spec and Inno Setup script
+tools/build_windows.py         builds the exe and installer (same script as CI)
   scripts/monitor_history.py   state history (history.jsonl) and timelines
   scripts/monitor_guide.py     what each check looks at and how to fix it
   scripts/monitor_gui.py       tkinter panel (fallback)
@@ -330,7 +334,7 @@ python tools/package_skill.py --output <new.zip>
 ```
 
 - CI runs on Linux, macOS, Windows and Python 3.10 Linux; `tools/ci_scope.py` distinguishes docs-only from code pushes.
-- Latest release `v0.4.0`; it includes the WebView UI, CJK fonts, state history, fix guidance, detection logs, the exit score and the close-freeze fix. See [CHANGELOG.md](CHANGELOG.md) for the full record and [docs/decisions.md](docs/decisions.md) for design trade-offs.
+- Latest release `v0.5.0`: adds the Windows installer (no Python needed) and the data-source note on the exit page; since `v0.4.0` it includes the WebView UI, CJK fonts, state history, fix guidance, detection logs and the exit score. See [CHANGELOG.md](CHANGELOG.md) for the full record and [docs/decisions.md](docs/decisions.md) for design trade-offs.
 
 ## The full Claude-Guardian Skill
 
@@ -390,6 +394,13 @@ See [authorization tiers](skills/claude-guardian/references/authorization-tiers.
 ## Feedback
 
 Report problems through [Issues](https://github.com/SumitaRinku/CCguard/issues). Include the Windows version, proxy client and version, reproduction steps and expected result; keep accounts, credentials, subscription links and full configs out of it. A device report can follow [device-report.yml](.github/ISSUE_TEMPLATE/device-report.yml).
+
+## Data sources and credits
+
+- The **exit score**'s trust score, IP type, location, network and risk flags come from the public API of [ip.net.coffee](https://ip.net.coffee/claude/); the score bands and restricted-region rule follow its Claude IP check page. Open that site in your browser for the full check (Claude exit IP, DNS and WebRTC leaks).
+- The **exit IP** comes from Cloudflare's `1.1.1.1/cdn-cgi/trace`.
+- Both are third-party services that CCGuard only contacts when you click "检测"; if they change, the exit score shows "检测失败" and local monitoring is unaffected.
+- The project is maintained on top of [Claude-Guardian](https://github.com/DUNHKpcc/Claude-Guardian).
 
 ## License
 

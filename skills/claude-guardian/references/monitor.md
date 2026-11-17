@@ -60,7 +60,9 @@
 
 ## 双击启动
 
-Release 包解压后，双击根目录的 `CCGuard.pyw`（无控制台）或 `CCGuard.cmd`（找不到 `pythonw`/`pyw` 时回退到 `python`/`py`）。首次运行会自动调用 `quickstart`，生成配置并打开面板；已在运行时不会开第二个窗口，会提示从托盘打开。仓库根目录同样有这两个文件。
+**安装程序（推荐）：**Release 附带的 `CCGuard-Setup-<版本>.exe` 由 GitHub Actions 从源码构建（PyInstaller 打包 Python 与 pywebview，Inno Setup 生成安装程序），按当前用户安装到 `%LOCALAPPDATA%\Programs\CCGuard`，不需要 Python 和管理员。开始菜单快捷方式带 `CCGuard.Monitor` 应用标识，通知以 CCGuard 署名；开机自启指向 `CCGuard.exe gui --config <配置> --tray --start-hidden`；卸载删除程序、快捷方式和自启项，保留配置与历史。未做代码签名，SmartScreen 可能提示，需“更多信息 → 仍要运行”。
+
+**Python 版：**Release 包解压后，双击根目录的 `CCGuard.pyw`（无控制台）或 `CCGuard.cmd`（找不到 `pythonw`/`pyw` 时回退到 `python`/`py`）。首次运行会自动调用 `quickstart`，生成配置并打开面板；已在运行时不会开第二个窗口，会提示从托盘打开。仓库根目录同样有这两个文件。
 
 ## 快速开始（推荐）
 

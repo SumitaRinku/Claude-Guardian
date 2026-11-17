@@ -1,0 +1,4 @@
+# Windows exe and installer build (tools/build_windows.py); Inno Setup 6 is installed separately.
+pyinstaller==6.22.3
+pyinstaller-hooks-contrib==2026.10
+pywebview==6.2.1

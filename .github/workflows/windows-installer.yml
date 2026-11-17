@@ -1,0 +1,68 @@
+name: Windows installer
+# Builds CCGuard.exe (PyInstaller) and CCGuard-Setup-<version>.exe (Inno Setup 6) from source,
+# verifies the installer (silent install, self-test, silent uninstall) and, for a published
+# release, attaches the installer and its checksum to that release.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version X.Y.Z (build only, nothing is published)'
+        required: true
+        default: '0.0.0'
+  push:
+    branches: [main]
+    paths:
+      - 'packaging/**'
+      - 'tools/build_windows.py'
+      - 'requirements-build.txt'
+      - 'skills/claude-guardian/scripts/**'
+      - 'skills/claude-guardian/assets/monitor/**'
+      - '.github/workflows/windows-installer.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write   # only used by the release upload step
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned build tools
+        run: python -m pip install -r requirements-build.txt
+      - name: Install Inno Setup 6 if missing
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup --no-progress -y
+          }
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          $v = '0.0.0'
+          if ('${{ github.event_name }}' -eq 'release') { $v = '${{ github.event.release.tag_name }}' }
+          elseif ('${{ github.event_name }}' -eq 'workflow_dispatch') { $v = '${{ inputs.version }}' }
+          "value=$($v.TrimStart('v'))" >> $env:GITHUB_OUTPUT
+      - name: Build, self-test and verify installer
+        run: python tools/build_windows.py --version ${{ steps.version.outputs.value }} --installer --verify-installer
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CCGuard-Setup-${{ steps.version.outputs.value }}
+          path: |
+            dist/CCGuard-Setup-*.exe
+            dist/SHA256SUMS-installer-*.txt
+          if-no-files-found: error
+      - name: Attach installer to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $files = @(Get-ChildItem dist -Filter 'CCGuard-Setup-*.exe') + @(Get-ChildItem dist -Filter 'SHA256SUMS-installer-*.txt')
+          gh release upload '${{ github.event.release.tag_name }}' $files.FullName --clobber

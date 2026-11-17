@@ -17,7 +17,9 @@ import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-ROOT = Path(__file__).resolve().parent.parent
+# Frozen (the CCGuard.exe build): resources live under the bundle's claude-guardian/ folder.
+FROZEN = bool(getattr(sys, 'frozen', False))
+ROOT = (Path(getattr(sys, '_MEIPASS', '.')) / 'claude-guardian') if FROZEN else Path(__file__).resolve().parent.parent
 ASSETS = ROOT / 'assets/monitor'
 ICON = ROOT / 'assets/monitor/icon-ok.ico'
 ICON_DIR = ROOT / 'assets/monitor'
@@ -973,11 +975,10 @@ def _install_shortcut(config_path, path, hidden, runner):
     config_path = Path(config_path).resolve()
     load_config(config_path)
     argv = launcher_argv(config_path, 0, hidden=hidden)
-    pythonw = Path(sys.executable).with_name('pythonw.exe')
-    target = pythonw if pythonw.is_file() else Path(sys.executable)
+    target, workdir = launch_target()
     return _shortcut_tool('Register', path, runner,
                           Target=target, Arguments=subprocess.list2cmdline(argv[1:]),
-                          Icon=ICON.resolve(), WorkingDirectory=Path(__file__).resolve().parent)
+                          Icon=ICON.resolve(), WorkingDirectory=workdir)
 
 
 def notifier_status(runner=subprocess.run, path=None):
@@ -1028,9 +1029,19 @@ def disable_autostart(runner=subprocess.run, path=None):
     return _shortcut_tool('Unregister', path or startup_shortcut(), runner)
 
 
-def launcher_argv(config_path, idle_minutes, hidden=False):
-    argv = [sys.executable, str(Path(__file__).resolve()), 'gui', '--config', str(config_path),
-            '--tray', '--idle-minutes', str(idle_minutes)]
+def launch_target(frozen=None):
+    """(program, working directory) for shortcuts: CCGuard.exe when frozen, else pythonw."""
+    if FROZEN if frozen is None else frozen:
+        return Path(sys.executable), Path(sys.executable).resolve().parent
+    pythonw = Path(sys.executable).with_name('pythonw.exe')
+    return (pythonw if pythonw.is_file() else Path(sys.executable)), Path(__file__).resolve().parent
+
+
+def launcher_argv(config_path, idle_minutes, hidden=False, frozen=None):
+    """Full command line; the frozen exe takes the monitor arguments directly."""
+    script = [] if (FROZEN if frozen is None else frozen) else [str(Path(__file__).resolve())]
+    argv = [sys.executable] + script + ['gui', '--config', str(config_path),
+                                        '--tray', '--idle-minutes', str(idle_minutes)]
     if hidden:
         argv.append('--start-hidden')
     return argv
@@ -1085,8 +1096,7 @@ def desktop(config_path, output, idle_minutes=0):
     if system == 'Windows':
         icon = output / 'guardian.ico'
         shutil.copyfile(ICON, icon)
-        pythonw = Path(sys.executable).with_name('pythonw.exe')
-        target = pythonw if pythonw.is_file() else Path(sys.executable)
+        target, _ = launch_target()
         command = ('$s=(New-Object -ComObject WScript.Shell).CreateShortcut(' + _ps_quote(output / (APP_NAME + '.lnk')) + ');'
                    '$s.TargetPath=' + _ps_quote(target) + ';$s.Arguments=' + _ps_quote(subprocess.list2cmdline(argv[1:])) +
                    ';$s.IconLocation=' + _ps_quote(icon) + ';$s.Save()')

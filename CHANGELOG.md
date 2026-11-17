@@ -1,5 +1,17 @@
 # 版本记录
 
+## Windows 安装程序与出口页来源说明（2026-11-17，MONITOR-EXE-20261117，ADR-083）
+
+- 安装程序：新增 `packaging/ccguard_app.py`（`CCGuard.exe` 入口：无参数时首次生成配置并打开面板；带参数时交给 `monitor.py` 命令行，开机自启和快捷方式用它；`--self-test` 不开窗口检查打包内容）、`packaging/ccguard.spec`（PyInstaller 文件夹版、无控制台、CCGuard 图标与版本信息）、`packaging/ccguard.iss`（Inno Setup 6：当前用户安装到 `%LOCALAPPDATA%\Programs\CCGuard`，不需要管理员；开始菜单快捷方式带 `CCGuard.Monitor` 应用标识；可选桌面图标；安装或升级前关闭正在运行的面板；卸载删除程序、快捷方式和开机自启项，保留 `monitor.json` 与 `history.jsonl`；中英文向导）
+- 构建：新增 `tools/build_windows.py`（生成版本资源、PyInstaller 构建、打包自检；`--installer` 调 ISCC 生成 `CCGuard-Setup-<版本>.exe`；`--verify-installer` 静默安装到临时目录、对安装后的 exe 自检、确认开始菜单快捷方式、静默卸载并确认程序与快捷方式已删除；输出 `SHA256SUMS-installer-<版本>.txt`）与 `requirements-build.txt`（固定 PyInstaller 6.22.3、pyinstaller-hooks-contrib 2026.10、pywebview 6.2.1）
+- CI：新增 `.github/workflows/windows-installer.yml`，在 `windows-latest` 上用同一脚本构建并验证；发布 Release 时把安装程序与校验文件附到该 Release；推送到 main 且改动面板、脚本、打包文件时只构建验证不发布
+- 冻结运行：`monitor.py` 在打包后从 `_MEIPASS/claude-guardian` 取资源；开机自启、开始菜单与桌面入口的快捷方式在打包后指向 `CCGuard.exe` 并直接传入 `gui --config … --tray`，不再指向 `pythonw monitor.py`
+- 出口页来源说明：信息栏新增“来源”一行，写明出口 IP 由 Cloudflare 1.1.1.1 返回、信任分与 IP 属性由 ip.net.coffee 提供，ip.net.coffee 可点开在浏览器查看；README 中英文新增“数据来源与致谢”
+- README：获取方式改为安装程序优先，写明不需要 Python 和管理员、安装位置、卸载保留哪些文件、CI 构建与哈希核对、未签名时 SmartScreen 的放行方法；Python 版 Release 包与源码作为方式 B、C
+- 测试：新增 `tests/test_windows_build.py`（版本号与版本资源、安装脚本与应用的互斥量／应用标识／快捷方式／自启项一致、打包清单含资源与延迟导入模块、冻结时的快捷方式目标、入口的参数转交与无控制台报错、自检报告、工作流触发与验证步骤、构建依赖固定版本、构建输出忽略）
+- 验证：Windows 11 本机 `python -m unittest discover -s tests` 1803 项通过（442 项 POSIX 专属跳过）；Node 页面测试、`compileall` 与两次打包字节一致通过。本机用隔离 venv 执行 `tools/build_windows.py --version 0.5.0`：生成 35 MB 的 `dist/CCGuard`，打包自检 17 项全过（含 WebView 的 .NET 后端与全部资源）；实际运行 `CCGuard.exe gui --config <配置副本> --tray`：窗口按内容定尺寸，托盘带上 exe 的进程号启动，点关闭后窗口保持响应，结束 exe 后托盘自行退出。安装程序在本机未构建（未装 Inno Setup），由 CI 构建并做静默安装、自检、卸载验证，结果见发布记录
+- 风险与回滚：安装程序未做代码签名，SmartScreen 会提示；PyInstaller 打包的程序偶有杀毒软件误报。安装程序需要 Windows 10/11 x64 与 Edge WebView2（系统自带）。回滚使用普通 revert；已安装的程序可在系统设置里卸载
+
 ## 出口评分与检测日志（2026-11-17，MONITOR-SCORE-20261117，ADR-082）
 
 - 出口评分：新增 `scripts/ip_score.py`、面板“出口”页和 `monitor.py ip-score`。只在用户点击时联网，先向 `https://1.1.1.1/cdn-cgi/trace` 取 Cloudflare 看到的出口 IP，再向 `https://ip.net.coffee/api/iprisk/<IP>` 取信任分、IP 类型、地区、运营商、时区和 VPN／代理／Tor／滥用标记；分段与受限地区记 0 分的规则和 https://ip.net.coffee/claude/ 页面一致。两个请求都不访问 claude.ai 或 anthropic.com；完整验收页只通过“浏览器打开详情”在用户自己的默认浏览器里打开。界面、日志和命令行输出只显示 IP 前两段，结果只在内存里，不进历史文件；并发点击不会重复请求

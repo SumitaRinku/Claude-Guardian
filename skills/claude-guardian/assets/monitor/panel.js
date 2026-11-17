@@ -376,6 +376,7 @@ function bind() {
   $('refresh').onclick = () => act(api().refresh());
   $('score-run').onclick = runScore;
   $('score-detail').onclick = () => act(api().open_ip_detail());
+  $('score-credit').onclick = () => act(api().open_ip_detail());
   $('drawer-close').onclick = closeDrawer;
   $('settings').onsubmit = event => { event.preventDefault(); act(api().apply(form(), false)); };
   $('save').onclick = () => act(api().apply(form(), true));

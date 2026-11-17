@@ -11,3 +11,7 @@ private-inputs/
 # User-supplied Anthropic fonts: used locally by the monitor panel, not redistributable,
 # so they never enter a public fork. The panel falls back to system fonts without them.
 fonts/
+
+# Windows exe / installer build output (tools/build_windows.py)
+/build/
+/dist/
