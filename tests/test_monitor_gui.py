@@ -227,14 +227,22 @@ class Fonts(unittest.TestCase):
                                     'mono': 'Consolas', 'log': 'Microsoft YaHei UI'})
 
     def test_installed_fonts_pick_first_preference(self):
+        # Noto Sans SC first: the installer bundles it, so every machine shows the same face.
         families = gui.font_families([], {'Microsoft YaHei UI', 'Noto Sans SC', 'MiSans',
                                           'Segoe UI', 'Georgia', 'Consolas', 'Cascadia Mono'})
-        self.assertEqual(families['ui'], 'MiSans')
+        self.assertEqual(families['ui'], 'Noto Sans SC')
         self.assertEqual(families['serif'], 'Georgia')
         self.assertEqual(families['mono'], 'Cascadia Mono')
         self.assertEqual(families['log'], families['ui'])
-        self.assertEqual(gui.font_families([], {'Microsoft YaHei UI', 'Noto Sans SC'})['ui'],
-                         'Noto Sans SC')
+        self.assertEqual(gui.font_families([], {'Microsoft YaHei UI', 'MiSans'})['ui'], 'MiSans')
+
+    def test_bundled_variable_font_is_used_by_its_family_name(self):
+        # Its name table carries the default instance, "Noto Sans SC Thin".
+        files = [fake_font(self.dir / 'NotoSansSC-VF.ttf', 'Noto Sans SC Thin')]
+        self.assertEqual(gui.font_families(files, {'Microsoft YaHei UI'})['ui'], 'Noto Sans SC')
+
+    def test_bundled_font_folder_is_searched(self):
+        self.assertIn(engine.ROOT / 'assets/monitor/fonts', gui.FONT_DIRS)
 
     def test_ui_font_is_always_cjk_capable(self):
         # Regression: a Latin-only body font (Anthropic Sans) made Tk fall back glyph by glyph,

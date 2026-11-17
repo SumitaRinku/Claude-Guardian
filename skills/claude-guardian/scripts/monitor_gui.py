@@ -159,7 +159,7 @@ FONT_DIRS = (engine.ROOT.parent.parent / 'fonts', engine.ROOT / 'assets/monitor/
 # or it is installed. MiSans and HarmonyOS Sans SC are screen-first UI faces (free to use,
 # not bundled); Noto Sans SC / Source Han Sans SC are OFL; Microsoft YaHei UI ships with Windows.
 FONT_PREFERENCES = {
-    'ui': ('MiSans', 'HarmonyOS Sans SC', 'Noto Sans SC', 'Source Han Sans SC',
+    'ui': ('Noto Sans SC', 'MiSans', 'HarmonyOS Sans SC', 'Source Han Sans SC',
            'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC'),
     # Only the Latin "CCGuard" wordmark uses the serif role.
     'serif': ('Anthropic Serif Web Text', 'Anthropic Serif Text', 'Georgia', 'Segoe UI Semibold'),
@@ -216,7 +216,11 @@ def register_font_files(files):
 
 def font_families(registered, installed=None):
     """Resolve each role to the first preferred family that is supplied or installed."""
-    available = ({font_family(path) for path in registered} | set(installed or ())) - {None}
+    supplied = {font_family(path) for path in registered} - {None}
+    # A variable font's name table carries its default instance ("Noto Sans SC Thin"); GDI exposes
+    # the family itself as "Noto Sans SC".
+    supplied |= {'Noto Sans SC' for name in supplied if name.startswith('Noto Sans SC')}
+    available = supplied | set(installed or ())
     chosen = {}
     for role, preferred in FONT_PREFERENCES.items():
         chosen[role] = next((name for name in preferred if name in available), FONT_DEFAULTS[role])

@@ -276,7 +276,7 @@ Runtime config paths differ by client and version; always point to the file the 
 
 - **Native window**: dark sidebar navigation (Status / Log / Settings) + status cards + ttk settings controls; Settings adjusts the interval, cooldown, notification states and pause, and can open the JSON config directly.
 - **Autostart**: a sidebar checkbox opens the panel hidden in the tray at login; off by default and removable at any time.
-- **Fonts**: CJK-first stack: `MiSans` → `HarmonyOS Sans SC` → `Noto Sans SC` / Source Han Sans → `Microsoft YaHei UI` (ships with Windows), first one installed or dropped into `fonts/` wins; the Latin wordmark uses Anthropic Serif (if supplied) or Georgia, check codes Anthropic Mono / `Cascadia Mono` / `Consolas`. Body text no longer uses the CJK-less Anthropic Sans, which made mixed Chinese/Latin labels fall back glyph by glyph.
+- **Fonts**: the installed app bundles Noto Sans SC (SIL OFL 1.1), so the UI looks the same on every machine regardless of installed fonts. The Python package ships no font files and picks from installed fonts: `Noto Sans SC` → `MiSans` → `HarmonyOS Sans SC` → Source Han Sans → `Microsoft YaHei UI` (ships with Windows). The Latin wordmark uses Anthropic Serif (if supplied) or Georgia, check codes Anthropic Mono / `Cascadia Mono` / `Consolas`.
 - **UI implementation**: `gui --ui auto` (default) prefers WebView and falls back to tkinter; `--ui web` is WebView only (error if unavailable), `--ui tk` is tkinter only.
 - **Closing the window**: with a tray, hide to tray, close, or cancel; without a tray, only close or cancel.
 - **Tray**: the shield changes colour with the overall state and shows the state on hover; transitions raise notifications with cooldown, and recovery is announced.
@@ -296,7 +296,7 @@ Runtime config paths differ by client and version; always point to the file the 
 | `core_ipv6` / `strict_route` / `dns_hijack` unknown | Open the card's "检测过程": if no runtime config was found, set `runtime_config` to the file the client actually loads; set `config_format` if needed |
 | `dns_servers` / `os_ipv6` degraded | A subscription update or client upgrade may have restored DNS override or IPv6; recheck |
 | Autostart does not work | Confirm the program directory and config path have not moved; toggle it again or run `autostart-enable`; check `CCGuard.lnk` in the current user's Startup folder |
-| Fonts still look poor | Install MiSans or HarmonyOS Sans SC (or drop the font files into `fonts/`, loaded per process, not installed); the last fallback is `Microsoft YaHei UI` |
+| Fonts still look poor | Use the installer build (bundles Noto Sans SC); for the Python package install Noto Sans SC or MiSans system-wide; the last fallback is `Microsoft YaHei UI` |
 | The panel still looks old | pywebview or WebView2 is missing, so it fell back to tkinter; run `python -m pip install -r requirements-desktop.txt`; the new UI has a "历史" (history) page in the sidebar |
 | No notifications | Check Windows notification settings and Focus Assist; the panel is the source of truth |
 | "monitor stopped updating" | The monitor process exited or the interval is too long; restart the panel |
@@ -415,6 +415,7 @@ Report problems through [Issues](https://github.com/SumitaRinku/CCguard/issues).
 - The **exit score**'s trust score, IP type, location, network and risk flags come from the public API of [ip.net.coffee](https://ip.net.coffee/claude/); the score bands and restricted-region rule follow its Claude IP check page. Open that site in your browser for the full check (Claude exit IP, DNS and WebRTC leaks).
 - The **exit IP** comes from Cloudflare's `1.1.1.1/cdn-cgi/trace`.
 - Both are third-party services that CCGuard only contacts when you click "检测"; if they change, the exit score shows "检测失败" and local monitoring is unaffected.
+- The installed app's UI font is [Noto Sans SC](https://fonts.google.com/noto/specimen/Noto+Sans+SC) (Adobe and Google, SIL Open Font License 1.1), downloaded at build time from a fixed commit of [google/fonts](https://github.com/google/fonts/tree/main/ofl/notosanssc) with its hash checked; the license text ships with the app (`_internal\claude-guardian\assets\monitor\fonts\OFL.txt` in the install folder).
 - The installer wizard's Simplified Chinese translation is the community translation carried in the official Inno Setup repository ([jrsoftware/issrc](https://github.com/jrsoftware/issrc), `Files/Languages/Unofficial/ChineseSimplified.isl`, maintained by Kira), kept with its credits.
 - The project is maintained on top of [Claude-Guardian](https://github.com/DUNHKpcc/Claude-Guardian).
 

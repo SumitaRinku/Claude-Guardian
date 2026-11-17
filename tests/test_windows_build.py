@@ -67,6 +67,46 @@ class SingleVersion(unittest.TestCase):
             self.assertIn(name, SPEC)
 
 
+class BundledFont(unittest.TestCase):
+    def test_pinned_to_a_google_fonts_commit_with_hashes(self):
+        self.assertRegex(build.FONT_COMMIT, r'^[0-9a-f]{40}$')
+        self.assertTrue(build.FONT_BASE.startswith('https://raw.githubusercontent.com/google/fonts/' + build.FONT_COMMIT))
+        names = {bundled for _, bundled, _, _ in build.FONT_FILES}
+        self.assertEqual(names, {'NotoSansSC-VF.ttf', 'OFL.txt'})
+        for _, _, size, digest in build.FONT_FILES:
+            self.assertGreater(size, 0)
+            self.assertRegex(digest, r'^[0-9a-f]{64}$')
+
+    def test_fetch_verifies_size_and_hash(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as folder:
+            good = {url: data for url, data in ((build.FONT_BASE + up, b'x' * size) for up, _, size, _ in build.FONT_FILES)}
+            files = tuple((up, name, size, hashlib.sha256(b'x' * size).hexdigest()) for up, name, size, _ in build.FONT_FILES)
+            with patch.object(build, 'FONT_DIR', Path(folder) / 'fonts'), patch.object(build, 'FONT_FILES', files):
+                build.fetch_fonts(get=good.__getitem__)
+                self.assertTrue((Path(folder) / 'fonts' / 'NotoSansSC-VF.ttf').is_file())
+                build.fetch_fonts(get=lambda url: self.fail('cached file must not be fetched again'))
+                (Path(folder) / 'fonts' / 'OFL.txt').write_bytes(b'tampered')
+                with self.assertRaises(build.BuildError):
+                    build.fetch_fonts(get=lambda url: b'tampered')
+
+    def test_spec_bundles_the_font_and_refuses_a_build_without_it(self):
+        self.assertIn("(str(FONT_DIR), 'claude-guardian/assets/monitor/fonts')", SPEC)
+        self.assertIn("raise SystemExit", SPEC)
+        source = (ROOT / 'packaging/ccguard_app.py').read_text(encoding='utf-8')
+        self.assertIn("'fonts/NotoSansSC-VF.ttf', 'fonts/OFL.txt'", source)
+
+    def test_page_prefers_the_bundled_face(self):
+        css = (ROOT / 'skills/claude-guardian/assets/monitor/panel.css').read_text(encoding='utf-8')
+        self.assertIn('src: url("fonts/NotoSansSC-VF.ttf")', css)
+        stack = css.split('--font-ui:', 1)[1].split(';', 1)[0]
+        self.assertTrue(stack.strip().startswith('"CCGuard Sans"'))
+
+    def test_font_is_never_committed(self):
+        ignored = (ROOT / '.gitignore').read_text(encoding='utf-8').splitlines()
+        self.assertIn('/skills/claude-guardian/assets/monitor/fonts/', ignored)
+
+
 class InstallerAgreesWithTheApp(unittest.TestCase):
     def test_per_user_install_without_admin(self):
         self.assertIn('PrivilegesRequired=lowest', ISS)

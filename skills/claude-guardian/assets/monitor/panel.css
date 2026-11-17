@@ -1,3 +1,11 @@
+/* Bundled with the installer (Noto Sans SC, SIL OFL 1.1); absent in the Python package, where the
+   stack below falls back to installed fonts. */
+@font-face {
+  font-family: "CCGuard Sans";
+  src: url("fonts/NotoSansSC-VF.ttf") format("truetype");
+  font-weight: 100 900;
+  font-display: swap;
+}
 :root {
   color-scheme: light dark;
   --paper: #f7f4ef;
@@ -19,7 +27,7 @@
   --fail: #a32a24;    --fail-tint: #f8e4e2; --fail-bar: #c9433b;
   --unknown: #5d6470; --unknown-tint: #eceef1; --unknown-bar: #9aa1ab;
   /* Body text: CJK-first so Chinese and Latin share one face and one baseline. */
-  --font-ui: "MiSans", "HarmonyOS Sans SC", "Noto Sans SC", "Source Han Sans SC",
+  --font-ui: "CCGuard Sans", "MiSans", "HarmonyOS Sans SC", "Noto Sans SC", "Source Han Sans SC",
              "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
   --font-brand: "Anthropic Serif Web Text", "Anthropic Serif Text", Georgia, serif;
   --font-mono: "Anthropic Mono Variable", "Anthropic Mono", "Cascadia Mono", Consolas, monospace;

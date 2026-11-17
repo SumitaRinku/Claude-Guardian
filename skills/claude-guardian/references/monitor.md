@@ -21,7 +21,7 @@
 | 界面 | `gui --ui auto`（默认）优先 WebView 桌面面板（pywebview + Edge WebView2，页面 `assets/monitor/panel.*`，经 JS 桥接调用 Python，不开端口、不发网络请求），不可用时回退 tkinter 面板；`--ui web`／`--ui tk` 强制其一。另有本地网页（`serve`）备选；托盘通知与面板实现无关。WebView 面板启动后按状态页内容自动调整窗口尺寸，十个检查项不滚动即可全部看到 |
 | 状态历史 | 两个面板都把状态变化写入配置旁的 `history.jsonl`（只含时间、检查项 ID 和状态，以及监测开始、心跳、退出标记），启动时删除 7 天前的记录；写不进去时只在内存中保留。WebView 面板“历史”页显示 24 小时／7 天时间线，未运行监测的时段显示为“未监测” |
 | 处理指引 | 点开检查卡片显示该项检查什么、当前结果代码对应的处理步骤（`monitor_guide.py`）、最近 24 小时时间线和最近一次变化；tkinter 面板弹出同样的说明和步骤，不含时间线 |
-| 字体 | 正文与日志用中文优先字体：`MiSans` → `HarmonyOS Sans SC` → `Noto Sans SC` → `Source Han Sans SC` → `Microsoft YaHei UI` → `Microsoft YaHei`，取第一个已安装或放进 `fonts/` 的（进程内私有注册，不安装到系统）；没有中文字形的 Anthropic Sans 不再用于正文，避免中英文混排逐字回退。英文字标用 Anthropic Serif（自备时）或 Georgia；检查码用 Anthropic Mono／`Cascadia Mono`／`Consolas`。WebView 面板用同一 CSS 字体栈，自备的 Anthropic Serif／Mono 经桥接以 FontFace 加载。`fonts/` 已列入 `.gitignore`，字体不随仓库或安装包分发 |
+| 字体 | 安装版自带思源黑体 Noto Sans SC（SIL OFL 1.1，构建时从 google/fonts 固定提交下载并校验 SHA-256，随程序附 `OFL.txt`）：WebView 面板用 `@font-face` 以“CCGuard Sans”最先加载，tkinter 面板进程内私有注册后优先用 `Noto Sans SC`，各机显示一致。Python 版不带字体文件，按已安装字体选：`Noto Sans SC` → `MiSans` → `HarmonyOS Sans SC` → `Source Han Sans SC` → `Microsoft YaHei UI` → `Microsoft YaHei`；也可把字体文件放进仓库 `fonts/`（进程内私有注册，只对 tkinter 面板生效）。没有中文字形的 Anthropic Sans 不用于正文；英文字标用 Anthropic Serif（自备时）或 Georgia，检查码用 Anthropic Mono／`Cascadia Mono`／`Consolas`。`fonts/` 与 `assets/monitor/fonts/` 都不进 git |
 | 采集方式 | 单次 PowerShell 查询，返回进程、网卡、路由、防火墙、DNS 与 IPv6 绑定 |
 | 采集间隔 | 默认 5 秒，配置项 `alerts.interval_seconds` |
 

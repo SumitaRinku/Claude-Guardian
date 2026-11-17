@@ -3,4 +3,4 @@
 Bump it together with the top entry of assets/monitor/release-notes.json before tagging a release;
 the release build refuses a tag that does not match.
 """
-__version__ = '0.6.0'
+__version__ = '0.6.1'

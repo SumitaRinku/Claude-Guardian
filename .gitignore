@@ -15,3 +15,5 @@ fonts/
 # Windows exe / installer build output (tools/build_windows.py)
 /build/
 /dist/
+# Bundled font is fetched at build time (tools/build_windows.py), never committed.
+/skills/claude-guardian/assets/monitor/fonts/

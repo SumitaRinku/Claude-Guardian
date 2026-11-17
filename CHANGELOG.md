@@ -1,5 +1,16 @@
 # 版本记录
 
+## 0.6.1：安装版自带思源黑体（2026-11-17，MONITOR-FONT-20261117）
+
+- 安装版打包思源黑体 Noto Sans SC 可变字重字体（SIL OFL 1.1）：`tools/build_windows.py` 在构建时从 google/fonts 固定提交 `a85815a4` 下载 `ofl/notosanssc/NotoSansSC[wght].ttf`（17772300 字节）与 `OFL.txt`，校验大小与 SHA-256，存入 `build/fonts/`，已有且哈希一致时不再下载；`ccguard.spec` 打进 `claude-guardian/assets/monitor/fonts/`，缺字体时拒绝构建；字体不进 git（`.gitignore`）
+- WebView 面板 `panel.css` 用 `@font-face` 以“CCGuard Sans”加载打包字体并排在字体栈首位，字重 100–900；Python 版没有这个文件时按原字体栈回退。实测 WebView2 能从页面同目录加载该字体，不需要经 JS 桥接传字节
+- tkinter 面板把 `Noto Sans SC` 放到首选；可变字体的名称表写的是默认实例“Noto Sans SC Thin”，按 GDI 实际家族名“Noto Sans SC”识别
+- 自检新增两项：`fonts/NotoSansSC-VF.ttf`、`fonts/OFL.txt`；版本号升为 0.6.1，更新日志新增本条
+- README 中英文更新字体说明、故障排查与“数据来源与致谢”（字体来源、许可与随附位置）；`monitor.md` 更新字体一行
+- 测试：`test_windows_build.py` 新增字体固定提交与哈希、下载校验（缓存、篡改拒绝）、打包清单与缺字体拒绝构建、页面字体栈首位、不提交字体；`test_monitor_gui.py` 更新首选顺序并新增可变字体家族名识别
+- 验证：Windows 11 本机 `python -m unittest discover -s tests` 1839 项通过（442 项 POSIX 专属跳过）；Node 页面测试、`compileall` 与两次打包字节一致通过（Python 版不含字体文件）。首次下载时字体与许可文件的 git blob 哈希与 google/fonts 上游一致；本机隔离 venv 构建 exe：下载并校验字体，自检 23 项全过；WebView 面板实际加载打包字体（“CCGuard Sans”解析到 1 个已加载字形，渲染截图核对）。安装程序由 CI 构建并做静默安装、自检、卸载验证，结果见发布记录
+- 风险与回滚：安装后的程序目录从约 35 MB 增至约 52 MB；构建需要能访问 raw.githubusercontent.com。回滚使用普通 revert
+
 ## 0.6.0：运行配置自动查找、版本号、检查更新与更新日志（2026-11-17，MONITOR-VERSION-20261117，ADR-084）
 
 - 修复：安装版首次运行生成的配置 `runtime_config` 为空，核心 IPv6、DNS 接管、严格路由三项因读不到代理核心配置而显示“未知”。现在留空表示自动查找：`find_runtime_config` 只在有明确默认位置的客户端里找（FlClash `%APPDATA%\com.follow\clash\config.yaml`，Clash Verge Rev `%APPDATA%\io.github.clash-verge-rev.clash-verge-rev\clash-verge.yaml`），未指定客户端时取最近修改的一份；每次采集都重新查找，已生成的空配置无需修改。显式填写的路径优先；其他客户端不猜路径。检测过程写明“在 FlClash 的默认位置找到运行配置”或“客户端默认位置也没有找到运行配置”，状态里不带路径

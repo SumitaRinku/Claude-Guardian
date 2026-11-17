@@ -28,6 +28,17 @@ DIST = ROOT / 'dist'
 SPEC = ROOT / 'packaging' / 'ccguard.spec'
 ISS = ROOT / 'packaging' / 'ccguard.iss'
 APP_DIR = DIST / 'CCGuard'
+# Bundled UI font: Noto Sans SC (SIL OFL 1.1) from the Google Fonts repository at a fixed commit.
+# Fetched at build time and checked against these hashes, so the repository does not carry 18 MB.
+FONT_COMMIT = 'a85815a42757630ce188fdad368c2dfc444d4773'
+FONT_BASE = 'https://raw.githubusercontent.com/google/fonts/%s/ofl/notosanssc/' % FONT_COMMIT
+FONT_FILES = (
+    # (upstream name, bundled name, size, sha256)
+    ('NotoSansSC%5Bwght%5D.ttf', 'NotoSansSC-VF.ttf', 17772300,
+     'a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da'),
+    ('OFL.txt', 'OFL.txt', 4388, '1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9'),
+)
+FONT_DIR = BUILD / 'fonts'
 ISCC_PATHS = (r'C:\Program Files (x86)\Inno Setup 6\ISCC.exe', r'C:\Program Files\Inno Setup 6\ISCC.exe')
 
 
@@ -110,8 +121,30 @@ def find_iscc(explicit=None):
     raise BuildError('找不到 Inno Setup 6 的 ISCC.exe；安装 Inno Setup 6 或用 --iscc 指定')
 
 
+def fetch_fonts(get=None):
+    """Download the pinned font files into build/fonts once; any hash mismatch stops the build."""
+    FONT_DIR.mkdir(parents=True, exist_ok=True)
+    for upstream, name, size, digest in FONT_FILES:
+        target = FONT_DIR / name
+        if target.is_file() and hashlib.sha256(target.read_bytes()).hexdigest() == digest:
+            continue
+        if get is None:
+            import urllib.request
+            request = urllib.request.Request(FONT_BASE + upstream, headers={'User-Agent': 'CCGuard-build'})
+            with urllib.request.urlopen(request, timeout=300) as response:
+                data = response.read(size + 1)
+        else:
+            data = get(FONT_BASE + upstream)
+        if len(data) != size or hashlib.sha256(data).hexdigest() != digest:
+            raise BuildError('字体文件校验失败：%s（大小 %d）' % (name, len(data)))
+        target.write_bytes(data)
+        print('font ok: %s %d bytes' % (name, size), flush=True)
+    return FONT_DIR
+
+
 def build_exe(version, numbers):
     BUILD.mkdir(exist_ok=True)
+    fetch_fonts()
     (BUILD / 'version_info.txt').write_text(version_info(version, numbers), encoding='utf-8')
     run([sys.executable, '-m', 'PyInstaller', SPEC, '--noconfirm', '--clean',
          '--distpath', DIST, '--workpath', BUILD / 'pyinstaller'], cwd=ROOT)
