@@ -4,7 +4,8 @@
     [string]$ShowFile = '',
     [Parameter(Mandatory=$true)][string]$IconDir,
     [int]$IntervalSeconds = 5,
-    [int]$CooldownSeconds = 120
+    [int]$CooldownSeconds = 120,
+    [int]$OwnerPid = 0
 )
 $ErrorActionPreference = 'SilentlyContinue'
 $ProgressPreference = 'SilentlyContinue'
@@ -129,6 +130,14 @@ Set-TrayState 'unknown'
 $timer = New-Object System.Windows.Forms.Timer
 $timer.Interval = [Math]::Max(2000, $IntervalSeconds * 1000)
 $timer.add_Tick({
+    # The monitoring process is gone (crashed or killed): remove the icon instead of showing stale state.
+    if ($OwnerPid -gt 0 -and -not (Get-Process -Id $OwnerPid -ErrorAction SilentlyContinue)) {
+        $timer.Stop()
+        $tray.Visible = $false
+        $tray.Dispose()
+        [System.Windows.Forms.Application]::Exit()
+        return
+    }
     $state = Read-State
     if (-not $state) { return }
     # The panel can change interval/cooldown at runtime; state.json carries the current values.

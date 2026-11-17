@@ -47,6 +47,40 @@ def set_native_icon(window, state_name):
         return False
 
 
+ASK_CLOSE_JS = '!!(window.CCGuard && (window.CCGuard.askClose(), true))'
+
+
+def closing_handler(window, flags, start=None):
+    """Handler for pywebview's `closing` event.
+
+    pywebview runs it synchronously on the window's UI thread, while `evaluate_js` waits for that
+    same thread: calling it here deadlocked the window when the user clicked close. So the handler
+    only cancels the close and asks the page from another thread; the page answers through
+    `PanelApi.close`. If the page cannot ask (not loaded, bridge gone), the window closes.
+    """
+    start = start or (lambda job: threading.Thread(target=job, daemon=True).start())
+
+    def ask():
+        try:
+            asked = window.evaluate_js(ASK_CLOSE_JS)
+        except Exception:
+            asked = False
+        if not asked:
+            flags['exit'] = True
+            try:
+                window.destroy()
+            except Exception:
+                pass
+
+    def on_closing():
+        if flags['exit']:
+            return True
+        start(ask)
+        return False
+
+    return on_closing
+
+
 class Unavailable(Exception):
     """pywebview or the Edge WebView2 runtime cannot show the panel."""
 
@@ -342,18 +376,7 @@ def run(cfg, config_path, tray=False, start_hidden=False, webview=None):
 
     api._bind(window, on_close)
 
-    def on_closing():
-        if flags['exit']:
-            return True
-        # Ask in the page; returning False keeps the window open until the user picks.
-        try:
-            window.evaluate_js('window.CCGuard && window.CCGuard.askClose()')
-        except Exception:
-            flags['exit'] = True
-            return True
-        return False
-
-    window.events.closing += on_closing
+    window.events.closing += closing_handler(window, flags)
 
     def watcher():
         api._note('启动', '监测已启动')

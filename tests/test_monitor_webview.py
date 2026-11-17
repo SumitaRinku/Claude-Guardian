@@ -273,6 +273,89 @@ class HistoryAndDetail(Base):
             self.assertFalse(params & reserved, name)
 
 
+class Closing(unittest.TestCase):
+    """Regression: clicking the window's close button froze the panel.
+
+    pywebview calls the `closing` handler on the UI thread and evaluate_js waits for that same
+    thread, so the handler must never call evaluate_js itself.
+    """
+
+    def window(self, answer=True, fail=False):
+        calls = {'js': [], 'destroyed': 0}
+
+        def evaluate_js(script):
+            calls['js'].append((script, threading.get_ident()))
+            if fail:
+                raise RuntimeError('bridge gone')
+            return answer
+
+        def destroy():
+            calls['destroyed'] += 1
+
+        return types.SimpleNamespace(evaluate_js=evaluate_js, destroy=destroy), calls
+
+    def test_handler_returns_without_touching_the_page(self):
+        window, calls = self.window()
+        jobs = []
+        flags = {'exit': False}
+        handler = web.closing_handler(window, flags, start=jobs.append)
+        self.assertFalse(handler())
+        self.assertEqual(calls['js'], [])
+        jobs[0]()
+        self.assertEqual(len(calls['js']), 1)
+        self.assertEqual(calls['destroyed'], 0)
+        self.assertFalse(flags['exit'])
+
+    def test_page_is_asked_on_another_thread(self):
+        window, calls = self.window()
+        handler = web.closing_handler(window, {'exit': False})
+        before = set(threading.enumerate())
+        self.assertFalse(handler())
+        for thread in set(threading.enumerate()) - before:
+            thread.join(2)
+        self.assertEqual(len(calls['js']), 1)
+        self.assertNotEqual(calls['js'][0][1], threading.get_ident())
+
+    def test_window_closes_when_the_page_cannot_ask(self):
+        for answer, fail in ((None, False), (False, False), (True, True)):
+            window, calls = self.window(answer=answer, fail=fail)
+            flags = {'exit': False}
+            jobs = []
+            web.closing_handler(window, flags, start=jobs.append)()
+            jobs[0]()
+            self.assertTrue(flags['exit'])
+            self.assertEqual(calls['destroyed'], 1)
+
+    def test_confirmed_exit_closes_immediately(self):
+        window, calls = self.window()
+        jobs = []
+        self.assertTrue(web.closing_handler(window, {'exit': True}, start=jobs.append)())
+        self.assertEqual(jobs, [])
+
+    def test_run_does_not_call_evaluate_js_in_the_closing_handler(self):
+        source = (SCRIPTS / 'monitor_webview.py').read_text(encoding='utf-8')
+        self.assertIn('window.events.closing += closing_handler(window, flags)', source)
+        self.assertNotIn('def on_closing():\n        if flags', source.split('def closing_handler', 1)[0])
+
+
+class TrayOwner(unittest.TestCase):
+    def test_tray_is_told_which_process_owns_it(self):
+        cfg = {'alerts': {'interval_seconds': 5, 'cooldown_seconds': 120}}
+        argv = engine.tray_argv('s.json', '', cfg, 'show.req')
+        self.assertEqual(argv[argv.index('-OwnerPid') + 1], str(engine.os.getpid()))
+        self.assertEqual(argv[argv.index('-ShowFile') + 1], 'show.req')
+        argv = engine.tray_argv('s.json', '', cfg, owner_pid=42)
+        self.assertEqual(argv[argv.index('-OwnerPid') + 1], '42')
+        self.assertNotIn('-ShowFile', argv)
+
+    def test_tray_exits_when_its_owner_is_gone(self):
+        tray = (ASSETS / 'tray.ps1').read_text(encoding='utf-8-sig')
+        self.assertIn('[int]$OwnerPid = 0', tray)
+        tick = tray.split('$timer.add_Tick({', 1)[1]
+        self.assertLess(tick.index('Get-Process -Id $OwnerPid'), tick.index('Read-State'))
+        self.assertIn('[System.Windows.Forms.Application]::Exit()', tick.split('Read-State', 1)[0])
+
+
 class Fonts(unittest.TestCase):
     def test_page_fonts_only_ship_wordmark_and_code_faces(self):
         sys.path.insert(0, str(ROOT / 'tests'))

@@ -840,13 +840,20 @@ def _ps_quote(value):
     return "'" + str(value).replace("'", "''") + "'"
 
 
-def spawn_tray(state_path, url, cfg, show_file=''):
+def tray_argv(state_path, url, cfg, show_file='', owner_pid=None):
+    """The tray exits on its own once owner_pid (the monitoring process) is gone."""
     argv = ['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
             '-File', str(ASSETS / 'tray.ps1'), '-StatePath', str(state_path), '-Url', url,
             '-IconDir', str(ICON_DIR), '-IntervalSeconds', str(cfg['alerts']['interval_seconds']),
-            '-CooldownSeconds', str(cfg['alerts']['cooldown_seconds'])]
+            '-CooldownSeconds', str(cfg['alerts']['cooldown_seconds']),
+            '-OwnerPid', str(os.getpid() if owner_pid is None else int(owner_pid))]
     if show_file:
         argv += ['-ShowFile', str(show_file)]
+    return argv
+
+
+def spawn_tray(state_path, url, cfg, show_file=''):
+    argv = tray_argv(state_path, url, cfg, show_file)
     try:
         return subprocess.Popen(argv, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
     except OSError:
