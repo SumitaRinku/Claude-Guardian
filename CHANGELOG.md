@@ -7,6 +7,7 @@
 - 文档：`monitor.md` 新增“检测原理与检测日志”（每项检查的数据来源、判定、日志内容）和“出口评分（联网，手动）”（请求、发出的数据、与浏览器验收页的差别）；“用途与边界”和“不做的事”改为“监测不联网，出口评分手动触发”；README 中英文同步能力表、安全边界、命令与文档索引
 - 测试：新增 `tests/test_ip_score.py`（成功、受限地区、IPv6、九种失败、完整 IP 不出现在结果里、只联系 Cloudflare 和 ip.net.coffee、CLI 退出码）；`test_monitor.py` 新增检测日志覆盖、解释力与不含地址路径；`test_monitor_webview.py` 新增出口评分记录、失败日志、并发点击、浏览器打开与详情证据；`tests/monitor-panel.cjs` 新增出口页数据转换
 - 验证：Windows 11 本机 `python -m unittest discover -s tests` 1785 项通过（442 项 POSIX 专属跳过）；`node tests/monitor-panel.cjs`、`tests/monitor-interaction.cjs`、`tests/webrtc-lifecycle.cjs` 与 `compileall` 通过；`package_skill.py` 两次打包字节一致，含 `ip_score.py`。真实数据端到端：用本机配置副本启动 WebView 面板，真实只读采集的检测过程与实际进程、网卡一致；在面板里点“检测”实际请求 Cloudflare 与 ip.net.coffee，0.7 秒返回 100 分（极度纯净，住宅），界面只显示 IP 前两段。“浏览器打开详情”只用替身验证调用参数，未在真实浏览器点开（not_run）；浅色模式未验收（not_run）
+- 发布：`v0.4.0`（提交 `eee00fa`），包含本条及此前的 WebView 新界面、中文字体、状态历史、处理指引与关闭卡死修复；Release 资产 `claude-guardian-0.4.0.zip`，SHA-256 `66fc932c124d860c9bfbd0972117074c266dfb79f9bb306cfc7f2e261ca82629`，另附 `SHA256SUMS-0.4.0.txt`；下载回的资产哈希一致。推送 CI 在 Linux、macOS、Windows 与 Python 3.10 Linux 通过
 - 风险与回滚：出口评分依赖 ip.net.coffee 的公开接口，接口变化时显示“检测失败”而不影响监测；评的是 Cloudflare 看到的出口，代理规则让 claude.ai 走不同节点时与浏览器页的 Claude 出口可能不同。回滚使用普通 revert
 
 ## 修复：关闭 WebView 面板时窗口卡死（2026-11-17，MONITOR-CLOSE-20261117）
