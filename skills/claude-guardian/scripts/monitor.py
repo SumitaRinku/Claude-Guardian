@@ -47,12 +47,15 @@ CLIENT_PRESETS = {
         'process_names': ('FlClashCore', 'FlClash'),
         'tun_patterns': ('flclash', 'meta tunnel'),
         'config_format': 'clash',
+        # Default locations of the config the core actually loads; used when runtime_config is empty.
+        'runtime_configs': (('APPDATA', 'com.follow', 'clash', 'config.yaml'),),
     },
     'clash-verge-rev': {
         'label': 'Clash Verge Rev',
         'process_names': ('verge-mihomo', 'verge-mihomo-alpha', 'clash-verge', 'clash-verge-service'),
         'tun_patterns': ('clash', 'mihomo', 'meta'),
         'config_format': 'clash',
+        'runtime_configs': (('APPDATA', 'io.github.clash-verge-rev.clash-verge-rev', 'clash-verge.yaml'),),
     },
     'clash-nyanpasu': {
         'label': 'Clash Nyanpasu',
@@ -435,7 +438,33 @@ def _blocked(value):
     return str(value).strip().lower() in ('block', '4')
 
 
-def proxy_profile(cfg):
+def find_runtime_config(client, env=None):
+    """The client's runtime config at its known default location, or None.
+
+    Only presets with a documented location are searched; with no client every such location is
+    tried. When several exist, the most recently written one wins (the client rewrites it on start).
+    """
+    env = os.environ if env is None else env
+    presets = [CLIENT_PRESETS[client]] if client in CLIENT_PRESETS else list(CLIENT_PRESETS.values())
+    found = []
+    for preset in presets:
+        for parts in preset.get('runtime_configs', ()):
+            base = env.get(parts[0])
+            if not base:
+                continue
+            candidate = Path(base).joinpath(*parts[1:])
+            try:
+                if candidate.is_file():
+                    found.append((candidate.stat().st_mtime, preset['label'], candidate))
+            except OSError:
+                continue
+    if not found:
+        return None
+    found.sort(key=lambda item: item[0], reverse=True)
+    return found[0][1], found[0][2]
+
+
+def proxy_profile(cfg, env=None):
     """Resolve optional client presets and overrides into the values the checks use."""
     proxy = cfg.get('proxy') if isinstance(cfg.get('proxy'), dict) else {}
     client = proxy.get('client', '') if isinstance(proxy.get('client', ''), str) else ''
@@ -450,13 +479,24 @@ def proxy_profile(cfg):
     fmt = proxy.get('config_format', 'auto')
     if fmt == 'auto':
         fmt = preset.get('config_format', 'auto')
+    runtime = proxy.get('runtime_config', '') or ''
+    source, source_label = ('configured', '') if runtime else ('none', '')
+    if not runtime:
+        # Empty means "find it": quickstart writes it empty, so the installed app reads the
+        # client's config without the user typing a path.
+        hit = find_runtime_config(client, env)
+        if hit:
+            source_label, path = hit
+            runtime, source = str(path), 'auto'
     return {
         'client': client or 'custom',
         'process_names': list(names),
         'tun_patterns': patterns,
         'config_format': fmt,
         'tun_adapter': proxy.get('tun_adapter', '') or '',
-        'runtime_config': proxy.get('runtime_config', '') or '',
+        'runtime_config': runtime,
+        'runtime_source': source,
+        'runtime_label': source_label,
     }
 
 
@@ -641,11 +681,13 @@ def evaluate(cfg, raw, core):
         else:
             add('guardian_rules', 'ok', 'GUARDIAN_RULES_PRESENT', lines)
 
-    if not profile['runtime_config']:
-        core_line = '未配置 proxy.runtime_config，读不到运行配置'
+    fmt_text = '自动识别' if profile['config_format'] == 'auto' else profile['config_format']
+    if profile['runtime_source'] == 'auto':
+        core_line = '在 %s 的默认位置找到运行配置（格式：%s）' % (profile['runtime_label'], fmt_text)
+    elif profile['runtime_config']:
+        core_line = '读取配置指定的运行配置（格式：%s）' % fmt_text
     else:
-        core_line = '读取运行配置（格式：%s）' % (
-            '自动识别' if profile['config_format'] == 'auto' else profile['config_format'])
+        core_line = '没有配置 proxy.runtime_config，客户端默认位置也没有找到运行配置'
 
     def setting(key, value):
         return '%s = %s' % (key, '读不到' if value is None else str(value).lower())
@@ -1165,8 +1207,10 @@ def main(argv=None):
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, 'reconfigure'):
             stream.reconfigure(encoding='utf-8')
+    from version import __version__
     parser = argparse.ArgumentParser(description='CCGuard 本机实时监测（只读、不联网）')
-    parser.add_argument('action', choices=['quickstart', 'check', 'detect', 'ip-score', 'serve', 'gui', 'desktop',
+    parser.add_argument('--version', action='version', version='CCGuard ' + __version__)
+    parser.add_argument('action', choices=['quickstart', 'check', 'detect', 'ip-score', 'update-check', 'serve', 'gui', 'desktop',
                                            'register-notifier', 'unregister-notifier', 'notifier-status',
                                            'autostart-enable', 'autostart-disable', 'autostart-status'])
     parser.add_argument('--config', type=Path)
@@ -1235,6 +1279,12 @@ def main(argv=None):
         if args.action == 'detect':
             print(json.dumps(detect(), ensure_ascii=False))
             return 0
+        if args.action == 'update-check':
+            # Networked and explicit: one request to GitHub's release list; nothing is downloaded.
+            import app_update
+            result = app_update.check()
+            print(json.dumps(result, ensure_ascii=False))
+            return 0 if result.get('ok') else 1
         if args.action == 'ip-score':
             # Networked and explicit: Cloudflare trace + ip.net.coffee score; never Claude.
             import ip_score

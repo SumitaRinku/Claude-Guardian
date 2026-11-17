@@ -14,6 +14,7 @@ import time
 
 import monitor as engine
 import monitor_gui as shared
+import app_update
 import ip_score
 import monitor_guide
 import monitor_history
@@ -123,8 +124,10 @@ class PanelApi:
 
     def __init__(self, cfg, config_path, store, tray_alive=lambda: False, autostart=None,
                  open_file=None, clock=time.time, history=None, screen=None,
-                 score_check=None, open_url=None):
+                 score_check=None, open_url=None, update_check=None):
         self._cfg = cfg
+        self._update_check = update_check or app_update.check
+        self._update_lock = threading.Lock()
         self._score_check = score_check or ip_score.check
         self._open_url = open_url
         self._ip = None
@@ -262,19 +265,46 @@ class PanelApi:
     def ip_result(self):
         return self._ip
 
-    def open_ip_detail(self):
-        """Open the full check in the user's own browser; the panel never loads that page."""
+    def about(self):
+        return {'version': app_update.__version__, 'notes': app_update.release_notes()}
+
+    def check_update(self):
+        """Newer releases from GitHub, only on the user's click; nothing is downloaded."""
+        if not self._update_lock.acquire(blocking=False):
+            return {'busy': True}
+        try:
+            result = self._update_check()
+        finally:
+            self._update_lock.release()
+        if result.get('ok'):
+            self._note('更新', '发现新版本 %s' % result['latest'] if result['update'] else '已是最新版本')
+        else:
+            self._note('更新', '检查更新失败：' + str(result.get('error')), 'unknown')
+        return result
+
+    def open_release(self, url=None):
+        """Open this repository's release page (or an installer link from it) in the browser."""
+        url = url or app_update.RELEASES_PAGE
+        if not app_update.allowed_url(url):
+            return {'ok': False, 'message': '只能打开 CCGuard 的发布页'}
+        return self._open(url, '已在浏览器打开发布页')
+
+    def _open(self, url, message):
         opener = self._open_url
         if opener is None:
             import webbrowser
             opener = webbrowser.open
         try:
-            opened = opener(ip_score.DETAIL_URL)
+            opened = opener(url)
         except Exception:
             opened = False
         if opened is False:
-            return {'ok': False, 'message': '无法打开浏览器：' + ip_score.DETAIL_URL}
-        return {'ok': True, 'message': '已在浏览器打开详情'}
+            return {'ok': False, 'message': '无法打开浏览器：' + url}
+        return {'ok': True, 'message': message}
+
+    def open_ip_detail(self):
+        """Open the full check in the user's own browser; the panel never loads that page."""
+        return self._open(ip_score.DETAIL_URL, '已在浏览器打开详情')
 
     def settings(self):
         alerts = self._cfg['alerts']

@@ -125,7 +125,7 @@ python ...\monitor.py quickstart --no-launch
 python ...\monitor.py quickstart --autostart
 ```
 
-The quick config does not check the allow-rule count or expected DNS servers by default; add them in Settings or the JSON. An empty `runtime_config` leaves the three config checks `unknown`.
+The quick config does not check the allow-rule count or expected DNS servers by default; add them in Settings or the JSON. With an empty `runtime_config`, CCGuard looks for the runtime config in the default places of FlClash and Clash Verge Rev; for other clients, or when nothing is found, the three config checks stay `unknown` and the path has to be filled in.
 
 ### 5. Manual configuration (optional)
 
@@ -140,7 +140,7 @@ Then copy `assets\monitor\config.example.json` to a private directory outside th
 - `target`: the exact output of `python -c "import platform; print(platform.node())"`
 - `proxy.client`: a preset from the table below
 - `proxy.tun_adapter`: keep `auto`; fill the exact adapter name only when detection fails
-- `proxy.runtime_config`: the absolute path of the config the client actually loads; leave it empty to skip the three config checks
+- `proxy.runtime_config`: the absolute path of the config the client actually loads; when empty, the default places of FlClash and Clash Verge Rev are searched
 - `firewall.allow_rule_prefix`, `network.expect_dns_servers`: match your deployment
 
 Never put subscriptions, nodes, passwords or tokens in the file; the schema has no such fields.
@@ -259,7 +259,7 @@ Minimal example (FlClash):
 | `proxy.tun_adapter` | no | exact adapter name or `auto` (default) |
 | `proxy.tun_match` | no | extra TUN name fragments, at most 8 |
 | `proxy.config_format` | no | `auto`, `clash`, `sing-box` or `xray` |
-| `proxy.runtime_config` | no | absolute path; `""` disables the three config checks |
+| `proxy.runtime_config` | no | absolute path; `""` searches the default places of FlClash and Clash Verge Rev, otherwise the three config checks are `unknown` |
 | `firewall.expect_default_block` | yes | require default outbound Block |
 | `firewall.allow_rule_prefix` | yes | allow-rule name prefix |
 | `firewall.min_allow_rules` | yes | minimum allow rules, 0–1000 |
@@ -293,7 +293,7 @@ Runtime config paths differ by client and version; always point to the file the 
 | `proxy_core` fails | Run `detect`; set the core process name explicitly with `process_names` |
 | `tun_adapter` fails | Confirm the client TUN is on; run `detect`; add a `tun_match` fragment if needed |
 | `default_route` fails | Confirm the default route goes through TUN; check for a higher-priority route or VPN |
-| `core_ipv6` / `strict_route` / `dns_hijack` unknown | Check that `runtime_config` points to the live config; set `config_format` if needed |
+| `core_ipv6` / `strict_route` / `dns_hijack` unknown | Open the card's "检测过程": if no runtime config was found, set `runtime_config` to the file the client actually loads; set `config_format` if needed |
 | `dns_servers` / `os_ipv6` degraded | A subscription update or client upgrade may have restored DNS override or IPv6; recheck |
 | Autostart does not work | Confirm the program directory and config path have not moved; toggle it again or run `autostart-enable`; check `CCGuard.lnk` in the current user's Startup folder |
 | Fonts still look poor | Install MiSans or HarmonyOS Sans SC (or drop the font files into `fonts/`, loaded per process, not installed); the last fallback is `Microsoft YaHei UI` |
@@ -323,6 +323,21 @@ tools/                         packaging, index and preview tools
 docs/                          decision records and supplementary docs
 ```
 
+## Versions and updates
+
+- **Current version**: shown on the panel's "关于" (About) page, by `monitor.py --version`, and in `CCGuard.exe`'s file properties.
+- **Update check**: on the About page click "检查更新"; it reads this repository's published releases from GitHub (no drafts or pre-releases) and lists newer versions with their notes; "去下载" opens the installer or release page in your browser. It goes online only when clicked, contacts only GitHub, and never downloads or installs by itself. CLI: `monitor.py update-check`.
+- **Upgrading**: run the newer installer; it closes a running CCGuard first and keeps `monitor.json` and `history.jsonl`.
+- **Update log**: the About page lists each version's main changes (bundled, works offline); the full development record is [CHANGELOG.md](CHANGELOG.md).
+- **Numbering**: `major.minor.patch`; fixes bump the patch number, features bump the minor number. The version lives only in `skills/claude-guardian/scripts/version.py`, which the UI, CLI, exe properties and installer all read.
+
+**Releasing** (maintainers):
+
+1. Bump `__version__` in `version.py` and add the version's entry at the top of `assets/monitor/release-notes.json` (a test checks they match).
+2. Update CHANGELOG, run the full suite, push to main, and wait for the three-platform CI and the installer build.
+3. After the user confirms, publish a GitHub Release tagged `vX.Y.Z`. The `Windows installer` workflow fails if the tag differs from `version.py`; otherwise it builds, verifies and attaches the installer.
+4. Download the published assets, check their hashes, and record the release in CHANGELOG.
+
 ## Development and verification
 
 ```bash
@@ -334,7 +349,7 @@ python tools/package_skill.py --output <new.zip>
 ```
 
 - CI runs on Linux, macOS, Windows and Python 3.10 Linux; `tools/ci_scope.py` distinguishes docs-only from code pushes.
-- Latest release `v0.5.1`: the setup wizard is in Simplified Chinese; since `v0.5.0` there is a Windows installer (no Python needed) and the data-source note on the exit page; since `v0.4.0` it includes the WebView UI, CJK fonts, state history, fix guidance, detection logs and the exit score. See [CHANGELOG.md](CHANGELOG.md) for the full record and [docs/decisions.md](docs/decisions.md) for design trade-offs.
+- Current version `0.6.0` (see Releases once published); `v0.5.1` made the setup wizard Simplified Chinese; since `v0.5.0` there is a Windows installer (no Python needed) and the data-source note on the exit page; since `v0.4.0` it includes the WebView UI, CJK fonts, state history, fix guidance, detection logs and the exit score. See [CHANGELOG.md](CHANGELOG.md) for the full record and [docs/decisions.md](docs/decisions.md) for design trade-offs.
 
 ## The full Claude-Guardian Skill
 

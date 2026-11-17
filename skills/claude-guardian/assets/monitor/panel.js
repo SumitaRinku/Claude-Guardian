@@ -4,7 +4,7 @@
 const LOG_LIMIT = 300;
 const STATES = ['ok', 'degraded', 'fail', 'unknown'];
 const STATE_TEXT = { ok: '正常', degraded: '降级', fail: '失效', unknown: '未知' };
-const PAGES = ['status', 'exit', 'history', 'log', 'settings'];
+const PAGES = ['status', 'exit', 'history', 'log', 'settings', 'about'];
 const DESIGN_WIDTH = 900;
 
 function stateClass(value) {
@@ -55,6 +55,16 @@ function scoreView(result) {
   const facts = Object.assign({}, result.facts, { flags: (result.facts.flags || []).join('、') || '无' });
   return { cls: stateClass(result.level), value: String(result.score), label: result.label,
            ip: '出口 ' + result.ip + (result.ipv6 ? '（IPv6）' : ''), facts };
+}
+
+// Update check result -> status line and whether a download button is offered.
+function updateView(result) {
+  if (!result) return { text: '点“检查更新”向 GitHub 查询是否有新版本', download: null };
+  if (!result.ok) return { text: '检查失败：' + result.error, download: null };
+  if (!result.update) return { text: '已是最新版本', download: null };
+  const top = result.releases[0];
+  return { text: '有新版本 ' + top.version + (top.date ? '（' + top.date + ' 发布）' : ''),
+           download: top.installer_url || top.page_url };
 }
 
 function mergeLog(rows, delta, limit) {
@@ -109,6 +119,7 @@ function bind() {
     }
     if (page === 'settings') loadSettings();
     if (page === 'exit') api().ip_result().then(renderScore);
+    if (page === 'about') loadAbout();
     if (page === 'log') scrollLog();
   }
 
@@ -229,6 +240,70 @@ function bind() {
       button.disabled = false;
       button.textContent = '检测';
       $('score-card').classList.remove('busy');
+    }
+  }
+
+  function noteList(lines) {
+    const list = document.createElement('ul');
+    for (const line of lines) {
+      const item = document.createElement('li');
+      item.textContent = line;
+      list.append(item);
+    }
+    return list;
+  }
+
+  async function loadAbout() {
+    const about = await api().about();
+    $('about-version').textContent = about.version;
+    const box = $('changelog');
+    box.textContent = '';
+    for (const entry of about.notes) {
+      const section = document.createElement('section');
+      const title = document.createElement('h4');
+      title.textContent = entry.version;
+      const date = document.createElement('span');
+      date.textContent = entry.date || '';
+      title.append(date);
+      section.append(title, noteList(entry.items));
+      box.append(section);
+    }
+  }
+
+  let downloadUrl = null;
+
+  function renderUpdate(result) {
+    const view = updateView(result);
+    $('update-status').textContent = view.text;
+    downloadUrl = view.download;
+    $('update-download').hidden = !downloadUrl;
+    $('update-badge').hidden = !(result && result.update);
+    const box = $('update-releases');
+    box.textContent = '';
+    box.hidden = !(result && result.update);
+    for (const release of (result && result.releases) || []) {
+      const card = document.createElement('div');
+      card.className = 'panel release';
+      const title = document.createElement('h4');
+      title.textContent = release.name;
+      const date = document.createElement('span');
+      date.textContent = release.date;
+      title.append(date);
+      card.append(title, noteList(release.notes));
+      box.append(card);
+    }
+  }
+
+  async function runUpdate() {
+    const button = $('update-run');
+    button.disabled = true;
+    button.textContent = '检查中…';
+    try {
+      const result = await api().check_update();
+      if (!result.busy) renderUpdate(result);
+    } finally {
+      button.disabled = false;
+      button.textContent = '检查更新';
     }
   }
 
@@ -377,6 +452,8 @@ function bind() {
   $('score-run').onclick = runScore;
   $('score-detail').onclick = () => act(api().open_ip_detail());
   $('score-credit').onclick = () => act(api().open_ip_detail());
+  $('update-run').onclick = runUpdate;
+  $('update-download').onclick = () => act(api().open_release(downloadUrl));
   $('drawer-close').onclick = closeDrawer;
   $('settings').onsubmit = event => { event.preventDefault(); act(api().apply(form(), false)); };
   $('save').onclick = () => act(api().apply(form(), true));
@@ -410,7 +487,7 @@ function bind() {
   document.addEventListener('keydown', event => {
     if (event.key === 'F5') { event.preventDefault(); act(api().refresh()); }
     if (event.key === 'Escape' && openCheck) closeDrawer();
-    if (event.ctrlKey && ['1', '2', '3', '4', '5'].includes(event.key)) {
+    if (event.ctrlKey && ['1', '2', '3', '4', '5', '6'].includes(event.key)) {
       event.preventDefault();
       select(PAGES[Number(event.key) - 1]);
     }
@@ -434,7 +511,7 @@ function bind() {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { stateClass, subtitleText, barBlocks, codeParts, clock, scoreView, mergeLog, logLine, base64ToBytes, LOG_LIMIT };
+  module.exports = { stateClass, subtitleText, barBlocks, codeParts, clock, scoreView, updateView, mergeLog, logLine, base64ToBytes, LOG_LIMIT };
 } else if (typeof window !== 'undefined') {
   if (window.pywebview && window.pywebview.api) bind();
   else window.addEventListener('pywebviewready', bind, { once: true });

@@ -23,15 +23,17 @@ def show_error(message):
 def self_test(output):
     """Everything the panel needs at runtime, checked without a window or the network."""
     import monitor
-    report = {'frozen': monitor.FROZEN, 'version': getattr(sys, 'ccguard_version', ''), 'checks': {}}
+    from version import __version__
+    report = {'frozen': monitor.FROZEN, 'version': __version__, 'checks': {}}
     checks = report['checks']
-    for name in ('monitor_webview', 'monitor_gui', 'monitor_history', 'monitor_guide', 'ip_score', 'webview', 'tkinter'):
+    for name in ('monitor_webview', 'monitor_gui', 'monitor_history', 'monitor_guide', 'ip_score', 'app_update',
+                 'version', 'webview', 'tkinter'):
         try:
             __import__(name)
             checks['import ' + name] = True
         except Exception as error:
             checks['import ' + name] = 'error: %s' % error
-    for relative in ('panel.html', 'panel.css', 'panel.js', 'tray.ps1', 'notifier-shortcut.ps1',
+    for relative in ('panel.html', 'panel.css', 'panel.js', 'release-notes.json', 'tray.ps1', 'notifier-shortcut.ps1',
                      'icon-ok.ico', 'icon-fail.ico', 'logo-ok.png', 'logo-unknown.png'):
         checks['asset ' + relative] = (monitor.ICON_DIR / relative).is_file()
     try:
@@ -39,6 +41,9 @@ def self_test(output):
         checks['import webview.platforms.winforms'] = True
     except Exception as error:
         checks['import webview.platforms.winforms'] = 'error: %s' % error
+    import app_update
+    notes = app_update.release_notes()
+    checks['release notes match version'] = bool(notes) and notes[0]['version'] == __version__
     report['ok'] = all(value is True for value in checks.values())
     Path(output).write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding='utf-8')
     return 0 if report['ok'] else 1

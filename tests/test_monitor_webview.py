@@ -329,6 +329,48 @@ class ExitScore(Base):
         self.assertEqual(self.api.detail('proxy_core')['evidence'], [])
 
 
+class AboutAndUpdate(Base):
+    def test_about_has_version_and_update_log(self):
+        about = self.api.about()
+        import version
+        self.assertEqual(about['version'], version.__version__)
+        self.assertEqual(about['notes'][0]['version'], version.__version__)
+
+    def test_check_update_logs_the_outcome(self):
+        self.api._update_check = lambda: {'ok': True, 'update': True, 'latest': '9.9.9', 'releases': []}
+        self.assertEqual(self.api.check_update()['latest'], '9.9.9')
+        self.assertIn('发现新版本 9.9.9', self.api.log_text())
+        self.api._update_check = lambda: {'ok': False, 'error': 'offline'}
+        self.api.check_update()
+        self.assertIn('检查更新失败：offline', self.api.log_text())
+
+    def test_concurrent_update_check_is_busy(self):
+        started, release, calls = threading.Event(), threading.Event(), []
+
+        def slow():
+            calls.append(1)
+            started.set()
+            release.wait(2)
+            return {'ok': True, 'update': False}
+        self.api._update_check = slow
+        worker = threading.Thread(target=self.api.check_update)
+        worker.start()
+        started.wait(2)
+        self.assertEqual(self.api.check_update(), {'busy': True})
+        release.set()
+        worker.join(2)
+        self.assertEqual(len(calls), 1)
+
+    def test_only_this_repositorys_release_pages_open(self):
+        opened = []
+        self.api._open_url = lambda url: opened.append(url) or True
+        page = 'https://github.com/SumitaRinku/CCguard/releases'
+        self.assertTrue(self.api.open_release()['ok'])
+        self.assertTrue(self.api.open_release(page + '/download/v1.0.0/CCGuard-Setup-1.0.0.exe')['ok'])
+        self.assertFalse(self.api.open_release('https://evil.example/setup.exe')['ok'])
+        self.assertEqual(opened, [page, page + '/download/v1.0.0/CCGuard-Setup-1.0.0.exe'])
+
+
 class Closing(unittest.TestCase):
     """Regression: clicking the window's close button froze the panel.
 

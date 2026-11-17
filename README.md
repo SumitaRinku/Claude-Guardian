@@ -127,7 +127,7 @@ python ...\monitor.py quickstart --no-launch
 python ...\monitor.py quickstart --autostart
 ```
 
-快速配置默认不校验放行规则数量和 DNS 期望值；需要时在面板设置页或 JSON 里补。`runtime_config` 留空时三项配置检查显示 `unknown`。
+快速配置默认不校验放行规则数量和 DNS 期望值；需要时在面板设置页或 JSON 里补。`runtime_config` 留空时，会在 FlClash、Clash Verge Rev 的默认位置自动查找运行配置；其他客户端或找不到时，三项配置检查显示 `unknown`，需要手动填写。
 
 ### 5. 手动配置（可选）
 
@@ -142,7 +142,7 @@ python ...\monitor.py detect
 - `target`：`python -c "import platform; print(platform.node())"` 的精确输出
 - `proxy.client`：下表中的客户端预设
 - `proxy.tun_adapter`：保持 `auto`；识别不到时再填精确网卡名
-- `proxy.runtime_config`：客户端实际加载的配置绝对路径；留空则跳过三项配置检查
+- `proxy.runtime_config`：客户端实际加载的配置绝对路径；留空时自动查找 FlClash、Clash Verge Rev 的默认位置
 - `firewall.allow_rule_prefix`、`network.expect_dns_servers`：按你的部署填写
 
 不要把订阅、节点、密码或令牌写进去；配置里没有这些字段。
@@ -261,7 +261,7 @@ python ...\monitor.py register-notifier --config <private>\monitor.json
 | `proxy.tun_adapter` | 否 | 精确网卡名或 `auto`（默认） |
 | `proxy.tun_match` | 否 | 额外 TUN 名称片段，最多 8 个 |
 | `proxy.config_format` | 否 | `auto`、`clash`、`sing-box`、`xray` |
-| `proxy.runtime_config` | 否 | 绝对路径；`""` 关闭三项配置检查 |
+| `proxy.runtime_config` | 否 | 绝对路径；`""` 时自动查找 FlClash、Clash Verge Rev 的默认位置，找不到则三项配置检查为 `unknown` |
 | `firewall.expect_default_block` | 是 | 是否要求默认出站 Block |
 | `firewall.allow_rule_prefix` | 是 | 放行规则名前缀 |
 | `firewall.min_allow_rules` | 是 | 放行规则数量下限，0–1000 |
@@ -295,7 +295,7 @@ python ...\monitor.py register-notifier --config <private>\monitor.json
 | `proxy_core` 失效 | 运行 `detect` 看核心进程名；用 `process_names` 显式填写 |
 | `tun_adapter` 失效 | 确认客户端 TUN 已开启；用 `detect` 看网卡名；必要时加 `tun_match` |
 | `default_route` 失效 | 确认默认路由走 TUN；检查是否有更高优先级的路由或 VPN |
-| `core_ipv6` / `strict_route` / `dns_hijack` 未知 | 核对 `runtime_config` 是否指向实际运行配置；必要时指定 `config_format` |
+| `core_ipv6` / `strict_route` / `dns_hijack` 未知 | 点开卡片看“检测过程”：没找到运行配置时，在配置里填 `runtime_config` 为客户端实际加载的文件；必要时指定 `config_format` |
 | `dns_servers` / `os_ipv6` 降级 | 订阅更新或客户端升级可能改回 DNS 覆写或 IPv6；恢复后重新核对 |
 | 开机自启没生效 | 确认程序目录和配置路径没有移动；重新勾选或用 `autostart-enable`；检查当前用户 Startup 目录里的 `CCGuard.lnk` |
 | 字体仍不好看 | 安装 MiSans 或 HarmonyOS Sans SC（也可把字体文件放进 `fonts/`，进程内加载，不安装到系统）；最低回退为 `Microsoft YaHei UI` |
@@ -325,6 +325,21 @@ tools/                         打包、索引与预览工具
 docs/                          决策记录与补充文档
 ```
 
+## 版本与更新
+
+- **查看版本**：面板“关于”页显示当前版本；命令行 `monitor.py --version`；安装版也写在 `CCGuard.exe` 的文件属性里。
+- **检查更新**：“关于”页点“检查更新”，向 GitHub 读取本仓库已发布的版本（不含草稿和预发布），列出比当前新的版本和它们的发布说明；“去下载”在浏览器里打开安装程序或发布页。只在点击时联网，只访问 GitHub，不自动下载、不自动安装。命令行：`monitor.py update-check`。
+- **升级**：运行新版本的安装程序即可覆盖安装，会先关闭正在运行的 CCGuard，保留 `monitor.json` 与 `history.jsonl`。
+- **更新日志**：“关于”页列出每个版本的主要变化（随程序打包，离线可看）；完整开发记录见 [CHANGELOG.md](CHANGELOG.md)。
+- **版本号规则**：`主版本.次版本.修订号`。只修问题升修订号，加功能升次版本号。版本号只写在 `skills/claude-guardian/scripts/version.py` 一处，界面、命令行、exe 属性和安装程序都读它。
+
+**发布新版本的步骤**（维护者）：
+
+1. 改 `version.py` 的 `__version__`，并在 `assets/monitor/release-notes.json` 最前面加这个版本的更新日志（测试会检查两者一致）。
+2. 写 CHANGELOG，跑完整测试，推送到 main，等三平台 CI 和安装程序构建都通过。
+3. 用户确认后，发布 GitHub Release，标签 `vX.Y.Z`。`Windows installer` 工作流发现标签与 `version.py` 不一致会直接失败，一致才构建、验证并附上安装程序。
+4. 下载发布的资产核对哈希，把发布记录写进 CHANGELOG。
+
 ## 开发与验证
 
 ```bash
@@ -336,7 +351,7 @@ python tools/package_skill.py --output <new.zip>
 ```
 
 - CI 在 Linux、macOS、Windows 与 Python 3.10 Linux 上运行；`tools/ci_scope.py` 区分文档与代码推送。
-- 最新发布 `v0.5.1`：安装向导改为简体中文；`v0.5.0` 起提供 Windows 安装程序（不需要 Python）与出口页来源说明；`v0.4.0` 起包含 WebView 新界面、中文字体、状态历史、处理指引、检测日志与出口评分。完整记录见 [CHANGELOG.md](CHANGELOG.md)，设计取舍见 [docs/decisions.md](docs/decisions.md)。
+- 当前版本 `0.6.0`（发布后见 Releases）；`v0.5.1` 安装向导改为简体中文；`v0.5.0` 起提供 Windows 安装程序（不需要 Python）与出口页来源说明；`v0.4.0` 起包含 WebView 新界面、中文字体、状态历史、处理指引、检测日志与出口评分。完整记录见 [CHANGELOG.md](CHANGELOG.md)，设计取舍见 [docs/decisions.md](docs/decisions.md)。
 
 ## 完整 Claude-Guardian Skill
 

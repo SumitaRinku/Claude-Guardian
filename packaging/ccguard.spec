@@ -14,7 +14,7 @@ a = Analysis(
     datas=[(str(SKILL / 'assets' / 'monitor'), 'claude-guardian/assets/monitor')],
     # Imported lazily by monitor.py / the panel, so name them for the analysis.
     hiddenimports=['monitor', 'monitor_webview', 'monitor_gui', 'monitor_history', 'monitor_guide',
-                   'ip_score', 'webview.platforms.winforms', 'webview.platforms.edgechromium', 'clr'],
+                   'ip_score', 'app_update', 'version', 'webview.platforms.winforms', 'webview.platforms.edgechromium', 'clr'],
     excludes=['yaml', 'unittest', 'pydoc', 'doctest'],
     noarchive=False,
 )

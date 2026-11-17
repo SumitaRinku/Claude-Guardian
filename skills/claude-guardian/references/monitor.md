@@ -44,7 +44,7 @@
 - **TUN 自动识别**：`tun_adapter` 默认 `auto`，按网卡名称和描述里的片段匹配。客户端改网卡名后通常不用改配置；名称完全对不上时用 `tun_match` 加一个片段。
 - **进程名**：`process_names` 不填时使用预设；显式填写优先于预设；`client` 与 `process_names` 都不填时，任一已知代理核心在运行就算通过。
 - **配置格式**：`config_format` 默认 `auto`。`.yaml`/`.yml` 按 Clash/Mihomo 解析；`.json` 按顶层键区分 sing-box（`route`、`tun` 或 `inbounds[].type`）与 Xray（`routing`）。也可以强制指定 `clash`、`sing-box`、`xray`。
-- **运行配置路径**：必须填客户端实际加载的那一份。不同客户端和版本的路径不同，这里不猜；填 `""` 可关闭三项配置检查。常见位置如下，仍以客户端当前设置为准。
+- **运行配置路径**：填客户端实际加载的那一份。留空（`""`，quickstart 生成的配置就是空的）时，只在有明确默认位置的客户端里自动查找：FlClash 的 `%APPDATA%\com.follow\clash\config.yaml`、Clash Verge Rev 的 `%APPDATA%\io.github.clash-verge-rev.clash-verge-rev\clash-verge.yaml`；没指定客户端时取其中最近修改的一份。其他客户端不猜路径，找不到时三项配置检查为 `unknown`，检测过程里写明“没有找到运行配置”。常见位置如下，仍以客户端当前设置为准。
 
 | 客户端 | 常见运行配置位置（示例，需自行确认） |
 | --- | --- |

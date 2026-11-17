@@ -352,9 +352,11 @@ class MultiClientConfig(unittest.TestCase):
             with self.assertRaises(m.MonitorError):
                 m.load_config(write_config(self.dir, cfg))
 
-    def test_empty_runtime_config_skips_core_checks(self):
+    def test_empty_runtime_config_skips_core_checks_when_nothing_is_found(self):
         cfg = m.validate_config(self.cfg(runtime_config=''))
-        state = m.state_of(cfg, FakeProviders(raw_state()))
+        # Isolated from the test machine: a real FlClash install would otherwise be discovered.
+        with patch.dict(os.environ, {'APPDATA': str(self.dir / 'empty-appdata')}):
+            state = m.state_of(cfg, FakeProviders(raw_state()))
         states = {check['id']: check['state'] for check in state['checks']}
         self.assertEqual(states['core_ipv6'], 'unknown')
         self.assertEqual(states['strict_route'], 'unknown')
@@ -590,6 +592,83 @@ class Evidence(unittest.TestCase):
         for check in state['checks']:
             self.assertEqual(check['code'], 'COLLECTOR_FAILED')
             self.assertEqual(check['evidence'], ['本次采集出错'])
+
+
+class RuntimeConfigDiscovery(unittest.TestCase):
+    """Regression: the installed app's quickstart config has runtime_config "", so core IPv6,
+    strict route and DNS hijack showed unknown although FlClash's config was in its default place."""
+
+    CLASH = '\n'.join(['ipv6: false', 'tun:', '  enable: true', '  strict-route: true',
+                       '  dns-hijack:', '    - any:53', 'proxies:', '  - {name: secret-node}']) + '\n'
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        self.env = {'APPDATA': str(self.dir / 'Roaming')}
+        self.cfg = config(self.dir)
+        self.cfg['proxy'] = {'client': 'flclash', 'tun_adapter': 'auto', 'config_format': 'auto', 'runtime_config': ''}
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def write(self, *parts, text=None, age=0):
+        path = self.dir.joinpath('Roaming', *parts)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text or self.CLASH, encoding='utf-8')
+        if age:
+            stamp = path.stat().st_mtime - age
+            os.utime(path, (stamp, stamp))
+        return path
+
+    def test_flclash_default_location_is_found(self):
+        path = self.write('com.follow', 'clash', 'config.yaml')
+        profile = m.proxy_profile(self.cfg, self.env)
+        self.assertEqual((profile['runtime_source'], profile['runtime_label']), ('auto', 'FlClash'))
+        self.assertEqual(Path(profile['runtime_config']), path)
+
+    def test_checks_read_the_found_config_without_leaking_its_path(self):
+        self.write('com.follow', 'clash', 'config.yaml')
+        with patch.dict(os.environ, self.env):
+            state = m.state_of(self.cfg, FakeProviders(raw_state()))
+        checks = {check['id']: check for check in state['checks']}
+        for check_id in ('core_ipv6', 'strict_route', 'dns_hijack'):
+            self.assertEqual(checks[check_id]['state'], 'ok', check_id)
+            self.assertIn('在 FlClash 的默认位置找到运行配置（格式：clash）', checks[check_id]['evidence'])
+        body = json.dumps(state, ensure_ascii=False)
+        self.assertNotIn(str(self.dir), body)
+        self.assertNotIn('secret-node', body)
+
+    def test_nothing_found_stays_unknown_and_says_so(self):
+        profile = m.proxy_profile(self.cfg, self.env)
+        self.assertEqual((profile['runtime_source'], profile['runtime_config']), ('none', ''))
+        with patch.dict(os.environ, self.env):
+            checks = {c['id']: c for c in m.state_of(self.cfg, FakeProviders(raw_state()))['checks']}
+        self.assertEqual(checks['core_ipv6']['state'], 'unknown')
+        self.assertIn('客户端默认位置也没有找到运行配置', checks['core_ipv6']['evidence'][0])
+
+    def test_configured_path_wins_over_discovery(self):
+        self.write('com.follow', 'clash', 'config.yaml')
+        own = self.dir / 'own.yaml'
+        own.write_text(self.CLASH, encoding='utf-8')
+        self.cfg['proxy']['runtime_config'] = str(own)
+        profile = m.proxy_profile(self.cfg, self.env)
+        self.assertEqual((profile['runtime_source'], Path(profile['runtime_config'])), ('configured', own))
+
+    def test_other_clients_location_is_not_used_for_a_named_client(self):
+        self.write('io.github.clash-verge-rev.clash-verge-rev', 'clash-verge.yaml')
+        self.assertIsNone(m.find_runtime_config('flclash', self.env))
+        self.assertEqual(m.find_runtime_config('clash-verge-rev', self.env)[0], 'Clash Verge Rev')
+
+    def test_without_a_client_the_newest_known_config_wins(self):
+        self.write('com.follow', 'clash', 'config.yaml', age=3600)
+        newest = self.write('io.github.clash-verge-rev.clash-verge-rev', 'clash-verge.yaml')
+        label, path = m.find_runtime_config('', self.env)
+        self.assertEqual((label, path), ('Clash Verge Rev', newest))
+
+    def test_presets_without_a_documented_location_are_not_guessed(self):
+        documented = {key for key, preset in m.CLIENT_PRESETS.items() if preset.get('runtime_configs')}
+        self.assertEqual(documented, {'flclash', 'clash-verge-rev'})
+        self.assertIsNone(m.find_runtime_config('flclash', {}))
 
 
 class RecordingRunner:

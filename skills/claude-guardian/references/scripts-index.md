@@ -41,11 +41,13 @@
 | `monitor_history.py` | 库 | 状态历史：配置旁 `history.jsonl` 的写入、7 天保留和时间线分段 | 同上 |
 | `monitor_guide.py` | 库 | 各检查项检查什么，以及每个结果代码的处理步骤 | 同上 |
 | `ip_score.py` | 库 | 手动出口评分：Cloudflare trace 取出口 IP，ip.net.coffee 取信任分；不访问 Claude，结果只留打码 IP | [monitor.md](monitor.md#exit-score) |
+| `app_update.py` | 库 | 手动检查更新：读取本仓库 GitHub 发布列表，列出更新的版本与说明；读取随包的更新日志；不下载、不安装 | [monitor.md](monitor.md) |
+| `version.py` | 库 | CCGuard 版本号的唯一来源（界面、命令行、exe 与安装程序都读它） | 同上 |
 | `monitor_gui.py` | 入口／库 | tkinter 回退面板与共享逻辑：中文优先字体、摘要横幅、状态卡片、彩色日志、设置、开机自启开关；纯逻辑可离线测试 | 同上 |
 
 双击入口：发布包与仓库根目录的 `CCGuard.pyw`（无控制台）和 `CCGuard.cmd`（回退启动器），首次双击调用 `quickstart`。
 
-随包资源：`assets/monitor/monitor.html`、`assets/monitor/monitor.css`、`assets/monitor/monitor.js`、`assets/monitor/panel.html`、`assets/monitor/panel.css`、`assets/monitor/panel.js`（WebView 桌面面板）、`assets/monitor/tray.ps1`、`assets/monitor/notifier-shortcut.ps1`（可选通知署名的开始菜单快捷方式）、`assets/monitor/config.example.json`、`assets/monitor/icon.png`、`assets/monitor/icon-ok.ico`、`assets/monitor/icon-degraded.ico`、`assets/monitor/icon-fail.ico`、`assets/monitor/icon-unknown.ico`、`assets/monitor/logo-ok.png`、`assets/monitor/logo-degraded.png`、`assets/monitor/logo-fail.png`、`assets/monitor/logo-unknown.png`（面板页眉盾牌）。
+随包资源：`assets/monitor/monitor.html`、`assets/monitor/monitor.css`、`assets/monitor/monitor.js`、`assets/monitor/panel.html`、`assets/monitor/panel.css`、`assets/monitor/panel.js`（WebView 桌面面板）、`assets/monitor/release-notes.json`（随程序打包的更新日志）、`assets/monitor/tray.ps1`、`assets/monitor/notifier-shortcut.ps1`（可选通知署名的开始菜单快捷方式）、`assets/monitor/config.example.json`、`assets/monitor/icon.png`、`assets/monitor/icon-ok.ico`、`assets/monitor/icon-degraded.ico`、`assets/monitor/icon-fail.ico`、`assets/monitor/icon-unknown.ico`、`assets/monitor/logo-ok.png`、`assets/monitor/logo-degraded.png`、`assets/monitor/logo-fail.png`、`assets/monitor/logo-unknown.png`（面板页眉盾牌）。
 
 ## 网络检测的其他部分
 

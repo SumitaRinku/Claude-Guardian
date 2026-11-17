@@ -195,6 +195,23 @@ h1 { font-size: 22px; line-height: 1.3; margin: 0; font-weight: 700; letter-spac
 .evidence .muted, .muted { color: var(--muted); }
 .source { margin: 0 0 4px; font: 12px var(--font-mono); color: var(--faint); user-select: text; }
 
+/* About */
+.about-card { display: flex; align-items: center; gap: 12px; padding: 16px 20px; margin-bottom: var(--gap); }
+.about-name { font-size: 18px; font-weight: 700; }
+#about-version { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 600; }
+.badge.update { background: var(--accent); }
+.update-releases { margin-bottom: var(--gap); display: grid; gap: var(--gap); }
+.release { padding: 14px 20px; border-color: var(--accent); }
+.release h4 { margin: 0 0 6px; font-size: 15px; }
+.release h4 span { color: var(--muted); font-weight: 400; margin-left: 8px; font-size: 13px; }
+.release ul, .changelog ul { margin: 0; padding-left: 18px; font-size: 13.5px; }
+.release li, .changelog li { margin: 3px 0; }
+.changelog { padding: 14px 20px; }
+.changelog h3 { margin: 0 0 10px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.changelog section + section { margin-top: 12px; }
+.changelog h4 { margin: 0 0 4px; font-size: 14px; }
+.changelog h4 span { color: var(--faint); font-weight: 400; margin-left: 8px; font-size: 12.5px; }
+
 /* Detail drawer */
 .drawer { position: absolute; top: 12px; right: 12px; bottom: 12px; width: min(380px, calc(100% - 24px)); overflow: auto;
           background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px;

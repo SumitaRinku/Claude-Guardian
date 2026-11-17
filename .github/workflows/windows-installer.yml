@@ -6,11 +6,6 @@ on:
   release:
     types: [published]
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version X.Y.Z (build only, nothing is published)'
-        required: true
-        default: '0.0.0'
   push:
     branches: [main]
     paths:
@@ -41,19 +36,17 @@ jobs:
           if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
             choco install innosetup --no-progress -y
           }
-      - name: Resolve version
-        id: version
+      - name: Build, self-test and verify installer
         shell: pwsh
         run: |
-          $v = '0.0.0'
-          if ('${{ github.event_name }}' -eq 'release') { $v = '${{ github.event.release.tag_name }}' }
-          elseif ('${{ github.event_name }}' -eq 'workflow_dispatch') { $v = '${{ inputs.version }}' }
-          "value=$($v.TrimStart('v'))" >> $env:GITHUB_OUTPUT
-      - name: Build, self-test and verify installer
-        run: python tools/build_windows.py --version ${{ steps.version.outputs.value }} --installer --verify-installer
+          # A release tag must equal scripts/version.py; other builds use version.py as is.
+          $tag = @()
+          if ('${{ github.event_name }}' -eq 'release') { $tag = @('--version', '${{ github.event.release.tag_name }}') }
+          python tools/build_windows.py @tag --installer --verify-installer
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:
-          name: CCGuard-Setup-${{ steps.version.outputs.value }}
+          name: CCGuard-Setup
           path: |
             dist/CCGuard-Setup-*.exe
             dist/SHA256SUMS-installer-*.txt

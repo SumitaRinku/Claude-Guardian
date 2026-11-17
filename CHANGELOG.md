@@ -1,5 +1,17 @@
 # 版本记录
 
+## 0.6.0：运行配置自动查找、版本号、检查更新与更新日志（2026-11-17，MONITOR-VERSION-20261117，ADR-084）
+
+- 修复：安装版首次运行生成的配置 `runtime_config` 为空，核心 IPv6、DNS 接管、严格路由三项因读不到代理核心配置而显示“未知”。现在留空表示自动查找：`find_runtime_config` 只在有明确默认位置的客户端里找（FlClash `%APPDATA%\com.follow\clash\config.yaml`，Clash Verge Rev `%APPDATA%\io.github.clash-verge-rev.clash-verge-rev\clash-verge.yaml`），未指定客户端时取最近修改的一份；每次采集都重新查找，已生成的空配置无需修改。显式填写的路径优先；其他客户端不猜路径。检测过程写明“在 FlClash 的默认位置找到运行配置”或“客户端默认位置也没有找到运行配置”，状态里不带路径
+- 版本号：新增 `scripts/version.py`（`__version__ = '0.6.0'`）作为唯一来源；面板“关于”页、`monitor.py --version`、exe 版本资源与安装程序版本都读它。`tools/build_windows.py` 默认取它，发布时传入的标签必须与之一致，否则构建失败；`Windows installer` 工作流在发布时传入标签，其他构建直接用 `version.py`
+- 检查更新：新增 `scripts/app_update.py` 与面板“关于”页、`monitor.py update-check`。只在点击时请求 `https://api.github.com/repos/SumitaRinku/CCguard/releases`，跳过草稿和预发布，列出比当前新的版本、发布日期和纯文本化的发布说明；“去下载”只允许打开本仓库发布页下的链接，在浏览器里打开。不下载、不安装、不访问 Claude。侧栏“关于”在有新版本时显示“新”
+- 更新日志：新增随程序打包的 `assets/monitor/release-notes.json`（面向用户的各版本要点，离线可看），“关于”页列出；打包自检检查其首个版本与 `version.py` 一致
+- tkinter 回退面板的设置页显示版本号
+- 文档：README 中英文新增“版本与更新”（查看版本、检查更新、升级、更新日志、版本号规则、发布步骤），更新 `runtime_config` 留空的含义与故障排查；`monitor.md` 写明自动查找的位置和范围
+- 测试：`test_monitor.py` 新增运行配置自动查找回归（找到、找不到、显式路径优先、不跨客户端、无客户端取最新、只对有明确位置的预设查找、不泄露路径），旧用例隔离 `APPDATA` 以免受本机 FlClash 影响；新增 `tests/test_app_update.py`；`test_monitor_webview.py` 新增关于页、检查更新与发布页白名单；`test_windows_build.py` 新增版本唯一来源与发布标签校验；`tests/monitor-panel.cjs` 新增更新结果转换
+- 验证：Windows 11 本机 `python -m unittest discover -s tests` 1832 项通过（442 项 POSIX 专属跳过）；Node 页面测试、`compileall` 与两次打包字节一致通过。用安装版首次运行生成的真实配置（`runtime_config` 为空）复现：修复前三项为“未知”，修复后读到 FlClash 运行配置，核心 IPv6 正常、DNS 接管正常、严格路由降级（与 FlClash 实际 `strict-route: false` 一致），状态里不含路径。`monitor.py --version` 输出 `CCGuard 0.6.0`；`update-check` 实际请求 GitHub，返回“已是最新”。本机隔离 venv 构建 exe，自检 21 项全过（含版本与更新日志一致）。WebView 面板“关于”页用替身更新结果截图核对。安装程序由 CI 构建与验证，结果见发布记录
+- 风险与回滚：检查更新依赖 GitHub 公开接口（未登录每小时 60 次）；自动查找只覆盖两种客户端，其他客户端仍需填写路径。回滚使用普通 revert
+
 ## 安装向导中文（2026-11-17，MONITOR-EXE-ZH-20261117）
 
 - 安装向导改为简体中文：`packaging/languages/ChineseSimplified.isl` 取自 Inno Setup 官方仓库 jrsoftware/issrc 的 `Files/Languages/Unofficial/ChineseSimplified.isl`（标签 `is-6_7_4`，提交 `c2913c99`，20905 字节，git blob `d6a11c44`），原样保留译者署名；`.gitattributes` 标记 `-text` 保持原始字节。`ccguard.iss` 直接引用仓库内文件，不再依赖构建机是否装有该翻译；`ShowLanguageDialog=auto` 按 Windows 界面语言自动选择，都不匹配时才询问。英文向导保留

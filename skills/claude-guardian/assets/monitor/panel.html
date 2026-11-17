@@ -15,6 +15,7 @@
       <button class="nav" data-page="history" type="button"><span>历史</span></button>
       <button class="nav" data-page="log" type="button"><span>日志</span></button>
       <button class="nav" data-page="settings" type="button"><span>设置</span></button>
+      <button class="nav" data-page="about" type="button"><span>关于</span><b id="update-badge" class="badge update" hidden>新</b></button>
     </nav>
     <label class="switch-row"><span>开机自启</span>
       <input id="autostart" type="checkbox" role="switch"><i class="switch" aria-hidden="true"></i></label>
@@ -112,6 +113,25 @@
           <button id="open-config" class="btn ghost" type="button">打开配置文件</button>
         </div>
       </form>
+    </section>
+
+    <section id="page-about" class="page">
+      <div class="inner">
+        <div class="panel about-card">
+          <div>
+            <div class="about-name">CCGuard <span id="about-version"></span></div>
+            <div id="update-status" class="subtitle">点“检查更新”向 GitHub 查询是否有新版本</div>
+          </div>
+          <span class="spacer"></span>
+          <button id="update-download" class="btn primary" type="button" hidden>去下载</button>
+          <button id="update-run" class="btn" type="button">检查更新</button>
+        </div>
+        <div id="update-releases" class="update-releases" hidden></div>
+        <div class="panel changelog">
+          <h3>更新日志</h3>
+          <div id="changelog"></div>
+        </div>
+      </div>
     </section>
 
     <aside id="drawer" class="drawer" hidden aria-labelledby="drawer-title">

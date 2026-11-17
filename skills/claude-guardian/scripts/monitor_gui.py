@@ -850,6 +850,10 @@ def run(cfg, config_path, tray=False, start_hidden=False):
     button(actions, '应用', on_apply, primary=True).pack(side='left', padx=(0, px(8)))
     button(actions, '保存到配置', on_save).pack(side='left', padx=(0, px(8)))
     button(actions, '打开配置文件', on_open_config).pack(side='left')
+    from version import __version__
+    tk.Label(actions, text='CCGuard ' + __version__, bg=PALETTE['card'], fg=PALETTE['faint'],
+             font=(ui, 9)).pack(side='right')
+    actions.grid_configure(sticky='ew')
 
     refresh_button = button(header, '立即采集', on_refresh, bg=PALETTE['soft'])
     refresh_button.pack(side='right', padx=(0, px(12)))

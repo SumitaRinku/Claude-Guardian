@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Build CCGuard.exe (PyInstaller) and, optionally, the per-user installer (Inno Setup 6).
 
-  python tools/build_windows.py --version 0.5.0                     exe folder + self-test
-  python tools/build_windows.py --version 0.5.0 --installer         + dist/CCGuard-Setup-0.5.0.exe
-  python tools/build_windows.py --version 0.5.0 --installer --verify-installer
+  python tools/build_windows.py                                     exe folder + self-test
+  python tools/build_windows.py --installer                         + dist/CCGuard-Setup-<version>.exe
+  python tools/build_windows.py --version v0.6.0 --installer --verify-installer
+        (--version is the release tag; it must equal scripts/version.py, or the build stops)
         + silent install into a temporary folder, self-test the installed exe, silent uninstall
         (CI runners only: it creates and removes a real per-user installation)
 
@@ -41,6 +42,23 @@ def parse_version(text):
         raise BuildError('版本号必须是 X.Y.Z：%r' % text)
     numbers = tuple(int(part) for part in match.groups())
     return '.'.join(map(str, numbers)), numbers + (0,)
+
+
+def source_version():
+    """__version__ from skills/claude-guardian/scripts/version.py, read without importing."""
+    text = (ROOT / 'skills' / 'claude-guardian' / 'scripts' / 'version.py').read_text(encoding='utf-8')
+    match = re.search(r"^__version__ = '([^']+)'$", text, re.M)
+    if not match:
+        raise BuildError('version.py 里没有 __version__')
+    return match.group(1)
+
+
+def resolve_version(requested=None):
+    """The version to build: version.py's, and a requested tag must agree with it."""
+    version, numbers = parse_version(source_version())
+    if requested is not None and parse_version(requested)[0] != version:
+        raise BuildError('发布标签 %s 与 version.py 的 %s 不一致，先改 version.py 和更新日志' % (requested, version))
+    return version, numbers
 
 
 def version_info(version, numbers):
@@ -152,7 +170,7 @@ def write_sums(files, version):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--version', required=True, help='X.Y.Z or vX.Y.Z')
+    parser.add_argument('--version', help='release tag (X.Y.Z or vX.Y.Z); must equal scripts/version.py')
     parser.add_argument('--installer', action='store_true', help='also build the Inno Setup installer')
     parser.add_argument('--verify-installer', action='store_true',
                         help='silently install, self-test and uninstall (CI only)')
@@ -161,7 +179,7 @@ def main(argv=None):
     try:
         if sys.platform != 'win32':
             raise BuildError('只能在 Windows 上构建')
-        version, numbers = parse_version(args.version)
+        version, numbers = resolve_version(args.version)
         build_exe(version, numbers)
         if args.installer:
             setup = build_installer(version, find_iscc(args.iscc))

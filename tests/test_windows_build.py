@@ -44,6 +44,29 @@ class Version(unittest.TestCase):
             self.assertIn(value, text)
 
 
+class SingleVersion(unittest.TestCase):
+    def test_build_reads_version_py(self):
+        import version
+        self.assertEqual(build.source_version(), version.__version__)
+        self.assertEqual(build.resolve_version()[0], version.__version__)
+        self.assertEqual(build.resolve_version('v' + version.__version__)[0], version.__version__)
+
+    def test_release_tag_must_match_version_py(self):
+        with self.assertRaises(build.BuildError):
+            build.resolve_version('v99.0.0')
+
+    def test_release_workflow_passes_the_tag(self):
+        self.assertIn("$tag = @('--version', '${{ github.event.release.tag_name }}')", WORKFLOW)
+        self.assertNotIn('inputs.version', WORKFLOW)
+
+    def test_self_test_checks_version_and_update_log(self):
+        source = (ROOT / 'packaging/ccguard_app.py').read_text(encoding='utf-8')
+        self.assertIn("'release notes match version'", source)
+        self.assertIn("'release-notes.json'", source)
+        for name in ("'app_update'", "'version'"):
+            self.assertIn(name, SPEC)
+
+
 class InstallerAgreesWithTheApp(unittest.TestCase):
     def test_per_user_install_without_admin(self):
         self.assertIn('PrivilegesRequired=lowest', ISS)
