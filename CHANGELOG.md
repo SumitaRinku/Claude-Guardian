@@ -1,5 +1,16 @@
 # 版本记录
 
+## 状态历史、处理指引与界面精简（2026-11-17，MONITOR-HISTORY-20261117，ADR-081）
+
+- 状态历史：新增 `scripts/monitor_history.py`。两个面板把状态变化写入配置旁的 `history.jsonl`，每行只有时间、检查项 ID 和状态，外加监测开始、5 分钟心跳和退出标记；启动时删除 7 天前的行，写不进去时退回内存。WebView 面板新增“历史”页，按 24 小时／7 天画出每项的时间线，没在监测的时段显示为“未监测”，异常退出的会话截止到最后一条记录
+- 处理指引：新增 `scripts/monitor_guide.py`，覆盖引擎会产生的每个失效／降级结果代码，未知代码按检查项回退到主要步骤。WebView 面板点开卡片弹出侧栏，显示检查内容、处理步骤、这一项最近 24 小时时间线、最近变化时间和结果代码；tkinter 面板弹出同样的说明和步骤
+- 窗口尺寸：WebView 面板在首次拿到检查结果后测量状态页实际内容，经桥接 `fit` 把窗口调到正好容纳全部检查项（不超过屏幕 94%）；tkinter 面板按控件实际高度定尺寸，卡片放得下时隐藏滚动条
+- 界面精简：状态横幅合并原来的总体状态胶囊，只写总体状态和异常项；卡片只保留名称和状态；副标题只写上次采集时间；去掉常驻页脚“只读监测 · 不联网 · 不改系统”、日志页说明、设置页范围提示和配置路径、侧栏副标题与自启说明、关闭对话框的补充说明，以及“正常 7 / 降级 1 …”计数和“目标”主机名；提示改为几秒后消失的浮层
+- 修复：pywebview 把桥接方法的参数名直接写进生成的 JS 函数，参数名为 `window` 会遮住全局对象，历史页因此调用失败。参数改名，并加测试禁止桥接方法使用 `window` 等全局名作参数
+- 测试：新增 `tests/test_monitor_history.py`（记录与保留、损坏行、不可写回退、时间线分段与裁剪、指引覆盖引擎全部失效代码）；`test_monitor_webview.py` 增加详情、时间线、窗口适配与参数名回归；`test_monitor_gui.py` 改为横幅文案测试并检查不再出现中圆点和常驻免责文字；`tests/monitor-panel.cjs` 增加时间线色块与代码片段拆分
+- 验证：Windows 11 本机 `python -m unittest discover -s tests` 1759 项通过（442 项 POSIX 专属跳过）；`node tests/monitor-panel.cjs`、`tests/monitor-interaction.cjs`、`tests/webrtc-lifecycle.cjs` 与 `compileall` 通过；`package_skill.py` 两次打包字节一致并包含新脚本。用合成的 7 天历史和假状态实际打开 WebView 面板，截图核对状态页（无滚动条，窗口 913×521）、24 小时／7 天历史页、处理指引侧栏、设置页与关闭对话框（深色模式），并截图核对 tkinter 回退面板。浅色模式、真实托盘联动与真实故障下的历史记录未验收（not_run）
+- 风险与回滚：`history.jsonl` 写在配置目录，7 天约数百 KB；时间线依赖本机时钟，调整系统时间会让分段错位。仅影响监测面板、打包清单、测试与文档；回滚使用普通 revert，`history.jsonl` 可直接删除
+
 ## WebView 面板、中文字体与界面改进（2026-11-17，MONITOR-WEBVIEW-20261117，ADR-080）
 
 - 新增默认 WebView 桌面面板：`scripts/monitor_webview.py` + `assets/monitor/panel.html/css/js`，用 pywebview 调 Edge WebView2 渲染；页面只经 JS 桥接调用 `PanelApi`（状态快照、设置应用／保存、立即采集、开机自启、打开配置、日志复制／清空、关闭选择），不开端口、不发网络请求。托盘、单实例、`--start-hidden` 与原面板一致；标题栏与任务栏图标随总体状态切换

@@ -6,44 +6,54 @@
 <div class="app">
   <aside class="sidebar">
     <div class="brand">
-      <img id="logo" src="logo-unknown.png" alt="" width="40" height="40">
-      <div><div class="wordmark">CCGuard</div><div class="sub">只读监测</div></div>
+      <img id="logo" src="logo-unknown.png" alt="" width="36" height="36">
+      <span class="wordmark">CCGuard</span>
     </div>
     <nav aria-label="页面">
       <button class="nav active" data-page="status" type="button"><span>状态</span><b id="badge" class="badge" hidden></b></button>
+      <button class="nav" data-page="history" type="button"><span>历史</span></button>
       <button class="nav" data-page="log" type="button"><span>日志</span></button>
       <button class="nav" data-page="settings" type="button"><span>设置</span></button>
     </nav>
-    <div class="side-footer">
-      <label class="switch-row"><span>开机自启</span>
-        <input id="autostart" type="checkbox" role="switch"><i class="switch" aria-hidden="true"></i></label>
-      <p class="side-note">登录后自动打开到托盘</p>
-    </div>
+    <label class="switch-row"><span>开机自启</span>
+      <input id="autostart" type="checkbox" role="switch"><i class="switch" aria-hidden="true"></i></label>
   </aside>
 
   <main>
     <header class="top">
       <div>
         <h1>本机防护</h1>
-        <p id="subtitle" class="subtitle">正在读取本机状态…</p>
+        <p id="subtitle" class="subtitle">正在读取…</p>
       </div>
-      <div class="top-actions">
-        <button id="refresh" class="btn" type="button" title="F5">立即采集</button>
-        <span id="pill" class="pill unknown">正在读取…</span>
-      </div>
+      <button id="refresh" class="btn" type="button" title="F5">立即采集</button>
     </header>
 
-    <section id="page-status" class="page active" aria-live="polite">
-      <div id="banner" class="banner unknown">
-        <div id="headline" class="headline">正在读取本机状态…</div>
-        <div id="detail" class="detail">首次采集完成后显示每一项的结果。</div>
+    <section id="page-status" class="page active">
+      <div class="inner">
+        <div id="banner" class="banner unknown" aria-live="polite">
+          <span id="headline" class="headline">正在读取…</span>
+          <span id="detail" class="detail"></span>
+        </div>
+        <div id="cards" class="cards"></div>
       </div>
-      <div id="cards" class="cards"></div>
+    </section>
+
+    <section id="page-history" class="page">
+      <div class="inner">
+        <div class="toolbar">
+          <div class="segmented" role="group" aria-label="时间范围">
+            <button class="seg active" data-window="86400" type="button">24 小时</button>
+            <button class="seg" data-window="604800" type="button">7 天</button>
+          </div>
+          <span class="spacer"></span>
+          <span class="legend"><i class="ok"></i>正常<i class="degraded"></i>降级<i class="fail"></i>失效<i class="unknown"></i>未知<i class="off"></i>未监测</span>
+        </div>
+        <div id="history" class="panel history"></div>
+      </div>
     </section>
 
     <section id="page-log" class="page">
       <div class="toolbar">
-        <span class="muted">最近 300 条事件，仅保存在本次运行的内存中</span>
         <span class="spacer"></span>
         <button id="copy-log" class="btn" type="button">复制全部</button>
         <button id="clear-log" class="btn" type="button">清空</button>
@@ -53,40 +63,50 @@
 
     <section id="page-settings" class="page">
       <form id="settings" class="panel form" autocomplete="off">
-        <h2>采集与通知</h2>
         <div class="field"><label for="interval">采集间隔</label>
-          <input id="interval" type="number" min="2" max="3600" step="1" required><span class="hint">秒，2–3600</span></div>
+          <input id="interval" type="number" min="2" max="3600" step="1" required><span class="unit">秒</span></div>
         <div class="field"><label for="cooldown">通知冷却</label>
-          <input id="cooldown" type="number" min="0" max="86400" step="1" required><span class="hint">秒，0–86400；同一项在冷却内只提醒一次</span></div>
-        <h2>这些状态出现时提醒</h2>
-        <div class="checks">
-          <label class="check"><input type="checkbox" name="notify" value="fail"><i></i>失效</label>
-          <label class="check"><input type="checkbox" name="notify" value="degraded"><i></i>降级</label>
-          <label class="check"><input type="checkbox" name="notify" value="unknown"><i></i>未知</label>
-        </div>
-        <label class="check"><input id="paused" type="checkbox"><i></i>暂停提醒（托盘与面板同时生效，监测照常进行）</label>
-        <p class="hint">开机自启在左侧栏底部切换；开启后登录 Windows 会自动打开面板并隐藏到托盘。</p>
-        <hr>
+          <input id="cooldown" type="number" min="0" max="86400" step="1" required><span class="unit">秒</span></div>
+        <div class="field"><span class="label">提醒</span>
+          <div class="checks">
+            <label class="check"><input type="checkbox" name="notify" value="fail"><i></i>失效</label>
+            <label class="check"><input type="checkbox" name="notify" value="degraded"><i></i>降级</label>
+            <label class="check"><input type="checkbox" name="notify" value="unknown"><i></i>未知</label>
+          </div></div>
+        <div class="field"><span class="label"></span>
+          <label class="check"><input id="paused" type="checkbox"><i></i>暂停提醒</label></div>
         <div class="actions">
           <button class="btn primary" type="submit">应用</button>
           <button id="save" class="btn" type="button">保存到配置</button>
-          <button id="open-config" class="btn" type="button">打开配置</button>
+          <span class="spacer"></span>
+          <button id="open-config" class="btn ghost" type="button">打开配置文件</button>
         </div>
-        <p class="hint">“应用”只影响本次运行；“保存到配置”会校验后写入配置文件。</p>
-        <p id="config-path" class="path"></p>
       </form>
     </section>
 
-    <footer id="status" class="status">只读监测 · 不联网 · 不改系统</footer>
+    <aside id="drawer" class="drawer" hidden aria-labelledby="drawer-title">
+      <div class="drawer-head">
+        <h2 id="drawer-title"></h2>
+        <span id="drawer-chip" class="chip"></span>
+        <span class="spacer"></span>
+        <button id="drawer-close" class="icon" type="button" aria-label="关闭">✕</button>
+      </div>
+      <p id="drawer-checks" class="drawer-checks"></p>
+      <ol id="drawer-steps" class="steps"></ol>
+      <h3>最近 24 小时</h3>
+      <div id="drawer-bar" class="bar"></div>
+      <div class="drawer-foot"><span id="drawer-changed"></span><code id="drawer-code"></code></div>
+    </aside>
+
+    <div id="toast" class="toast" role="status" hidden></div>
   </main>
 </div>
 
 <dialog id="close-dialog">
-  <h3 id="close-question">要隐藏到托盘继续监测，还是直接关闭？</h3>
-  <p id="close-detail" class="muted"></p>
+  <h3 id="close-question"></h3>
   <div class="dialog-actions">
     <button class="btn" value="cancel" type="button">取消</button>
-    <button class="btn" value="exit" type="button">直接关闭</button>
+    <button class="btn" value="exit" type="button">退出</button>
     <button class="btn primary" value="hide" type="button">隐藏到托盘</button>
   </div>
 </dialog>

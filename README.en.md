@@ -41,7 +41,9 @@ It splits the state into 10 checks and shows them in green / orange / red / grey
 | **Double-click start** | Extract the release package and double-click `CCGuard.pyw` (or `CCGuard.cmd`); the first run writes a config and opens the panel, and a second double-click does not open another window |
 | **One-command start** | `quickstart` detects the host, client and TUN, writes a config and opens the panel; an existing config is never overwritten |
 | **State-coloured shield** | Green ✓ ok, orange ! degraded, red ✕ fail, grey — unknown; window, tray and page title stay in sync |
-| **New UI** | WebView desktop panel (pywebview + Edge WebView2): problem summary banner, sidebar problem count, coloured log, follows system dark mode; falls back to the improved tkinter panel when pywebview is missing |
+| **New UI** | WebView desktop panel (pywebview + Edge WebView2): status banner, sidebar problem count, coloured log, follows system dark mode, window sized to its content; falls back to the tkinter panel when pywebview is missing |
+| **State history** | 24-hour / 7-day timeline per check, with unmonitored time shown separately; stored in `history.jsonl` next to the config, check ids and states only, kept for 7 days |
+| **Fix guidance** | Click any check card to see what it checks, the steps for the current result, its last 24 hours and the result code |
 | **Window + tray + web** | WebView panel (default) / tkinter panel (fallback), tray notifications, local `127.0.0.1` web page as an alternative |
 | **System notifications** | Alerts on state transitions with cooldown and recovery notices; can be paused |
 | **Optional autostart** | A per-user Startup shortcut opens the panel hidden in the tray at login; off by default |
@@ -287,7 +289,7 @@ Runtime config paths differ by client and version; always point to the file the 
 | `dns_servers` / `os_ipv6` degraded | A subscription update or client upgrade may have restored DNS override or IPv6; recheck |
 | Autostart does not work | Confirm the program directory and config path have not moved; toggle it again or run `autostart-enable`; check `CCGuard.lnk` in the current user's Startup folder |
 | Fonts still look poor | Install MiSans or HarmonyOS Sans SC (or drop the font files into `fonts/`, loaded per process, not installed); the last fallback is `Microsoft YaHei UI` |
-| The panel still looks old | pywebview or WebView2 is missing, so it fell back to tkinter; run `python -m pip install -r requirements-desktop.txt`. The log page says which panel is running |
+| The panel still looks old | pywebview or WebView2 is missing, so it fell back to tkinter; run `python -m pip install -r requirements-desktop.txt`; the new UI has a "历史" (history) page in the sidebar |
 | No notifications | Check Windows notification settings and Focus Assist; the panel is the source of truth |
 | "monitor stopped updating" | The monitor process exited or the interval is too long; restart the panel |
 | The window will not open | tkinter is missing; use the `serve` web page |
@@ -301,6 +303,8 @@ skills/claude-guardian/
   SKILL.md                     Claude-Guardian Skill entry
   scripts/monitor.py           CCGuard monitor entry
   scripts/monitor_webview.py   WebView panel (pywebview bridge, default)
+  scripts/monitor_history.py   state history (history.jsonl) and timelines
+  scripts/monitor_guide.py     what each check looks at and how to fix it
   scripts/monitor_gui.py       tkinter panel (fallback)
   assets/monitor/              panel, tray, icons and config template
   references/monitor.md        monitor config, checks and boundaries

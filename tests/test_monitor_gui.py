@@ -135,28 +135,19 @@ class Summary(unittest.TestCase):
         self.assertEqual([row['state'] for row in gui.problems(self.ROWS)],
                          ['fail', 'degraded', 'unknown'])
 
-    def test_summary_names_every_problem(self):
-        headline, detail = gui.summary_text(self.ROWS)
-        self.assertEqual(headline, '3 项需要关注')
-        self.assertTrue(detail.startswith('防火墙默认阻止 失效'))
-        self.assertIn('网卡 DNS 未知', detail)
+    def test_banner_is_overall_state_plus_problem_items(self):
+        headline, detail = gui.banner_text('fail', 1000, self.ROWS)
+        self.assertEqual(headline, '防护已失效')
+        self.assertEqual(detail, '防火墙默认阻止 失效、核心 IPv6 降级、网卡 DNS 未知')
 
-    def test_summary_all_ok_and_empty(self):
-        self.assertIn('全部正常', gui.summary_text(self.ROWS[:1])[0])
-        self.assertIn('正在读取', gui.summary_text([])[0])
+    def test_banner_has_no_detail_when_ok_or_reading(self):
+        self.assertEqual(gui.banner_text('ok', 1000, self.ROWS[:1]), ('防护正常', ''))
+        self.assertEqual(gui.banner_text('fail', 0, self.ROWS), ('正在读取…', ''))
 
-    def test_tally_counts_states(self):
-        self.assertEqual(gui.tally(self.ROWS), {'ok': 1, 'degraded': 1, 'fail': 1, 'unknown': 1})
-
-    def test_every_check_has_a_description(self):
-        self.assertEqual(set(gui.DESCRIPTIONS), set(engine.CHECK_IDS))
-
-    def test_ago_text(self):
-        self.assertEqual(gui.ago_text(2), '刚刚')
-        self.assertEqual(gui.ago_text(42), '42 秒前')
-        self.assertEqual(gui.ago_text(180), '3 分钟前')
-        self.assertEqual(gui.ago_text(7300), '2 小时前')
-        self.assertEqual(gui.ago_text(-5), '刚刚')
+    def test_visible_text_avoids_middle_dots_and_idle_disclaimers(self):
+        source = (SCRIPTS / 'monitor_gui.py').read_text(encoding='utf-8')
+        for text in ('·', '只读监测', '不联网', '不改系统', '仅保存在本次运行', '登录后自动打开'):
+            self.assertNotIn(text, source)
 
 
 class LogDelta(unittest.TestCase):

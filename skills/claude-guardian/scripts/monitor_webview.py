@@ -14,6 +14,8 @@ import time
 
 import monitor as engine
 import monitor_gui as shared
+import monitor_guide
+import monitor_history
 
 PAGE = engine.ICON_DIR / 'panel.html'
 # Supplied Latin fonts the page may load (wordmark and check codes). Body text stays on the
@@ -21,6 +23,8 @@ PAGE = engine.ICON_DIR / 'panel.html'
 PAGE_FONT_PREFIXES = ('Anthropic Serif', 'Anthropic Mono')
 PAGE_FONT_LIMIT = 4 * 1024 * 1024
 INSTALL_HINT = 'python -m pip install pywebview'
+DAY = 86400
+HISTORY_WINDOWS = (DAY, 7 * DAY)
 
 
 def set_native_icon(window, state_name):
@@ -66,16 +70,27 @@ def page_fonts(files):
 
 
 def row_view(row):
-    return dict(row, state_text=shared.STATE_TEXT.get(row['state'], row['state']),
-                description=shared.DESCRIPTIONS.get(row['id'], ''))
+    return dict(row, state_text=shared.STATE_TEXT.get(row['state'], row['state']))
+
+
+def fit_size(window_size, inner_size, needed_size, screen_size, margin=0.94):
+    """Outer window size that gives the page exactly needed_size, kept on screen."""
+    width = window_size[0] + needed_size[0] - inner_size[0]
+    height = window_size[1] + needed_size[1] - inner_size[1]
+    if screen_size:
+        width = min(width, int(screen_size[0] * margin))
+        height = min(height, int(screen_size[1] * margin))
+    return int(width), int(height)
 
 
 class PanelApi:
     """Methods the page calls. Everything else is private so pywebview does not expose it."""
 
     def __init__(self, cfg, config_path, store, tray_alive=lambda: False, autostart=None,
-                 open_file=None, clock=time.time):
+                 open_file=None, clock=time.time, history=None, screen=None):
         self._cfg = cfg
+        self._history = history
+        self._screen = screen
         self._config_path = Path(config_path)
         self._store = store
         self._tray_alive = tray_alive
@@ -111,46 +126,86 @@ class PanelApi:
         with self._lock:
             self._log.add(kind, text, level)
 
+    def _record(self):
+        state = self._store.read()
+        if self._history is not None and state.get('checked_at'):
+            self._history.record(engine.states_of(state))
+
+    def _records(self, window):
+        if self._history is None:
+            return []
+        return self._history.snapshot(self._clock() - window)
+
     # ---- called from the page ----
     def snapshot(self, since=0):
         self._observe()
         state = self._store.read()
         rows = [row_view(row) for row in shared.build_rows(state)]
-        headline, detail = shared.summary_text(rows)
-        flagged = shared.problems(rows)
         stamp = state.get('checked_at') or 0
+        overall = state.get('overall', 'unknown') if stamp else 'unknown'
+        headline, detail = shared.banner_text(overall, stamp, rows)
+        flagged = shared.problems(rows)
         with self._lock:
             total = self._log.total
             rows_log = self._log.snapshot()
         fresh = total - int(since or 0)
         rebuild = fresh > len(rows_log) or fresh < 0
         tail = rows_log if rebuild else (rows_log[len(rows_log) - fresh:] if fresh > 0 else [])
-        alerts = self._cfg['alerts']
         notice, self._notice = self._notice, None
         return {
-            'overall': state.get('overall', 'unknown') if stamp else 'unknown',
-            'overall_text': shared.OVERALL_TEXT.get(state.get('overall'), '状态未知') if stamp else '正在读取…',
+            'overall': overall,
             'checked_at': stamp,
-            'ago': shared.ago_text(self._clock() - stamp) if stamp else '',
-            'target': state.get('target_ref') or self._cfg.get('target') or '—',
             'rows': rows,
             'headline': headline,
             'detail': detail,
             'problems': len(flagged),
             'worst': flagged[0]['state'] if flagged else 'ok',
-            'counts': shared.tally(rows),
             'log': {'total': total, 'rebuild': rebuild,
                     'rows': [{'time': t, 'kind': k, 'text': x, 'level': lv} for t, k, x, lv in tail]},
-            'paused': bool(alerts.get('paused')),
             'notice': notice,
         }
+
+    def detail(self, check_id):
+        """Card detail: what is checked, what to do now, and the last 24 hours of this check."""
+        if check_id not in engine.CHECK_IDS:
+            return None
+        row = next((item for item in shared.build_rows(self._store.read()) if item['id'] == check_id),
+                   {'id': check_id, 'label': shared.LABELS[check_id], 'state': 'unknown', 'code': '—'})
+        records = self._records(DAY)
+        now = self._clock()
+        return dict(row_view(row), **monitor_guide.guide(check_id, row['state'], row['code']),
+                    now=now, window=DAY,
+                    segments=monitor_history.timeline(records, now, DAY, [check_id])[check_id],
+                    changed_at=monitor_history.last_change(records, check_id))
+
+    def timeline(self, span=DAY):
+        # Parameter names become JS parameter names in pywebview's generated stub; one named
+        # `window` would shadow the global and break the call.
+        span = int(span) if int(span or 0) in HISTORY_WINDOWS else DAY
+        now = self._clock()
+        segments = monitor_history.timeline(self._records(span), now, span, engine.CHECK_IDS)
+        return {'now': now, 'window': span,
+                'rows': [{'id': check_id, 'label': shared.LABELS[check_id], 'segments': segments[check_id]}
+                         for check_id in engine.CHECK_IDS]}
+
+    def fit(self, needed_width, needed_height, inner_width, inner_height):
+        """Resize the window so the page content fits exactly (sizes in CSS pixels)."""
+        window = self._window
+        if window is None:
+            return {'ok': False}
+        try:
+            width, height = fit_size((window.width, window.height), (inner_width, inner_height),
+                                     (needed_width, needed_height), self._screen)
+            window.resize(width, height)
+        except Exception:
+            return {'ok': False}
+        return {'ok': True, 'width': width, 'height': height}
 
     def settings(self):
         alerts = self._cfg['alerts']
         return {'interval': alerts['interval_seconds'], 'cooldown': alerts['cooldown_seconds'],
                 'notify': {name: name in alerts['notify_states'] for name in ('fail', 'degraded', 'unknown')},
-                'paused': bool(alerts.get('paused')), 'config_path': str(self._config_path),
-                'tray': bool(self._tray_alive())}
+                'paused': bool(alerts.get('paused'))}
 
     def apply(self, form, save=False):
         form = form or {}
@@ -187,7 +242,7 @@ class PanelApi:
             return {'ok': False, 'enabled': not enabled, 'message': '开机自启未变更：' + str(error)}
         self._note('启动', '已开启开机自启' if enabled else '已关闭开机自启')
         return {'ok': True, 'enabled': bool(enabled),
-                'message': '已开启开机自启：登录后自动打开面板到托盘' if enabled else '已关闭开机自启'}
+                'message': '已开启开机自启' if enabled else '已关闭开机自启'}
 
     def open_config(self):
         try:
@@ -251,11 +306,16 @@ def run(cfg, config_path, tray=False, start_hidden=False, webview=None):
     def tray_alive():
         return box['child'] is not None and box['child'].poll() is None
 
-    api = PanelApi(cfg, config_path, store, tray_alive=tray_alive)
+    history = monitor_history.History(monitor_history.history_path(config_path)).open()
+    try:
+        screen = (webview.screens[0].width, webview.screens[0].height)
+    except Exception:
+        screen = None
+    api = PanelApi(cfg, config_path, store, tray_alive=tray_alive, history=history, screen=screen)
     hidden = bool(start_hidden and tray_alive())
     window = webview.create_window(
-        engine.APP_NAME, url=PAGE.as_uri(), js_api=api, width=1040, height=760,
-        min_size=(860, 600), background_color='#f7f4ef', hidden=hidden, text_select=True)
+        engine.APP_NAME, url=PAGE.as_uri(), js_api=api, width=980, height=700,
+        min_size=(720, 460), background_color='#f7f4ef', hidden=hidden, text_select=True)
     flags = {'exit': False, 'visible': not hidden, 'shown': False}
 
     def on_shown():
@@ -266,6 +326,7 @@ def run(cfg, config_path, tray=False, start_hidden=False, webview=None):
 
     def stop_everything():
         store.stop.set()
+        history.close()
         if box['child'] is not None:
             box['child'].terminate()
             box['child'] = None
@@ -295,12 +356,13 @@ def run(cfg, config_path, tray=False, start_hidden=False, webview=None):
     window.events.closing += on_closing
 
     def watcher():
-        api._note('启动', '监测已启动（WebView 面板）')
+        api._note('启动', '监测已启动')
         if hidden:
             api._note('面板', '已隐藏到托盘，监测继续')
         threading.Thread(target=store.loop, daemon=True).start()
         while not store.stop.is_set():
             api._observe()
+            api._record()
             overall = store.read().get('overall', 'unknown')
             if flags['shown'] and flags.get('icon') != overall:
                 if set_native_icon(window, overall if overall in engine.STATES else 'unknown'):

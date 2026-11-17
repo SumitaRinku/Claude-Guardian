@@ -39,7 +39,9 @@ CCGuard 是本仓库在 [Claude-Guardian](https://github.com/DUNHKpcc/Claude-Gua
 | **双击启动** | Release 包解压后双击 `CCGuard.pyw`（或 `CCGuard.cmd`），首次自动生成配置并打开面板；再次双击不会开第二个窗口 |
 | **一条命令启动** | `quickstart` 自动识别主机、客户端和 TUN，生成配置并打开面板；已有配置不覆盖 |
 | **状态色盾牌** | 绿 ✓ 正常、橙 ! 降级、红 ✕ 失效、灰 — 未知；窗口、托盘与网页标题同步 |
-| **新界面** | WebView（pywebview + Edge WebView2）桌面面板：问题摘要横幅、侧栏异常计数、彩色日志、跟随系统深色模式；没装 pywebview 时自动回退改进版 tkinter 面板 |
+| **新界面** | WebView（pywebview + Edge WebView2）桌面面板：状态横幅、侧栏异常计数、彩色日志、跟随系统深色模式，窗口按内容自动定尺寸；没装 pywebview 时自动回退 tkinter 面板 |
+| **状态历史** | 每项检查最近 24 小时／7 天的状态时间线，未运行监测的时段单独标出；记录存在配置旁的 `history.jsonl`，只含检查项和状态，保留 7 天 |
+| **处理指引** | 点开任一检查卡片，查看它检查什么、当前结果对应的处理步骤、这一项最近 24 小时的变化和结果代码 |
 | **窗口 + 托盘 + 网页** | WebView 面板（默认）／tkinter 面板（回退）、托盘通知、`127.0.0.1` 本地网页备选 |
 | **系统通知** | 状态跃迁时提醒，带冷却与恢复提示；可暂停 |
 | **可选开机自启** | 当前用户 Startup 快捷方式，登录后隐藏到托盘；默认关闭，可随时撤销 |
@@ -285,7 +287,7 @@ python ...\monitor.py register-notifier --config <private>\monitor.json
 | `dns_servers` / `os_ipv6` 降级 | 订阅更新或客户端升级可能改回 DNS 覆写或 IPv6；恢复后重新核对 |
 | 开机自启没生效 | 确认程序目录和配置路径没有移动；重新勾选或用 `autostart-enable`；检查当前用户 Startup 目录里的 `CCGuard.lnk` |
 | 字体仍不好看 | 安装 MiSans 或 HarmonyOS Sans SC（也可把字体文件放进 `fonts/`，进程内加载，不安装到系统）；最低回退为 `Microsoft YaHei UI` |
-| 面板还是旧样式 | 没装 pywebview 或缺 WebView2，已回退 tkinter；执行 `python -m pip install -r requirements-desktop.txt`，日志页会写明当前用哪个面板 |
+| 面板还是旧样式 | 没装 pywebview 或缺 WebView2，已回退 tkinter；执行 `python -m pip install -r requirements-desktop.txt`；新界面左侧有“历史”页 |
 | 收不到通知 | 检查 Windows 通知设置与专注助手；面板显示才是准的 |
 | 提示「监测已停止更新」 | 监测进程已退出或采集间隔过长；重新启动面板 |
 | 窗口打不开 | 缺少 tkinter；改用 `serve` 网页版 |
@@ -299,6 +301,8 @@ skills/claude-guardian/
   SKILL.md                     Claude-Guardian Skill 入口
   scripts/monitor.py           CCGuard 监测入口
   scripts/monitor_webview.py   WebView 面板（pywebview 桥接，默认）
+  scripts/monitor_history.py   状态历史（history.jsonl）与时间线
+  scripts/monitor_guide.py     各检查项的说明与处理步骤
   scripts/monitor_gui.py       tkinter 面板（回退）
   assets/monitor/              面板、托盘、图标与配置模板
   references/monitor.md        监测配置、检查项与边界

@@ -10,6 +10,8 @@ import threading
 import time
 
 import monitor as engine
+import monitor_guide
+import monitor_history
 
 PALETTE = {
     'paper': '#f7f4ef',
@@ -40,19 +42,6 @@ LABELS = {
     'dns_servers': '网卡 DNS',
     'os_ipv6': '系统 IPv6',
 }
-# One line per card: what "正常" means for this check, so a non-expert can read the panel.
-DESCRIPTIONS = {
-    'proxy_core': '代理客户端的核心进程正在运行',
-    'tun_adapter': 'TUN 虚拟网卡存在并已启用',
-    'default_route': '默认路由经由 TUN 网卡出站',
-    'firewall_block': '出站默认阻止，代理断开也不漏流量',
-    'guardian_rules': '防火墙里有 Guardian 放行规则',
-    'core_ipv6': '代理核心未启用 IPv6',
-    'strict_route': '代理配置开启了严格路由',
-    'dns_hijack': '代理核心接管 DNS 查询',
-    'dns_servers': '物理网卡 DNS 指向预期地址',
-    'os_ipv6': '系统 IPv6 已关闭',
-}
 STATE_TEXT = {'ok': '正常', 'degraded': '降级', 'fail': '失效', 'unknown': '未知'}
 COLORS = {'ok': '#2f6b4f', 'degraded': '#8a5a11', 'fail': '#a32a24', 'unknown': '#5d6470'}
 # Light backgrounds paired with COLORS for chips, the summary banner and problem cards.
@@ -64,7 +53,6 @@ OVERALL_TEXT = {
     'fail': '防护已失效',
     'unknown': '状态未知',
 }
-IDLE_STATUS = '只读监测 · 不联网 · 不改系统'
 
 
 class LogBuffer:
@@ -107,40 +95,19 @@ def build_rows(state):
     return rows
 
 
-def tally(rows):
-    counts = {name: 0 for name in engine.STATES}
-    for row in rows:
-        counts[row['state']] = counts.get(row['state'], 0) + 1
-    return counts
-
-
 def problems(rows):
     """Non-ok rows, worst first; the original order breaks ties so the list stays stable."""
     flagged = [row for row in rows if row['state'] != 'ok']
     return sorted(flagged, key=lambda row: SEVERITY.get(row['state'], SEVERITY['unknown']))
 
 
-def summary_text(rows):
-    """Headline and detail line for the status banner."""
-    if not rows:
-        return '正在读取本机状态…', '首次采集完成后显示每一项的结果。'
-    flagged = problems(rows)
-    if not flagged:
-        return '%d 项检查全部正常' % len(rows), '代理、路由、防火墙与 DNS 都符合预期。'
-    detail = ' · '.join(row['label'] + ' ' + STATE_TEXT.get(row['state'], row['state'])
-                        for row in flagged)
-    return '%d 项需要关注' % len(flagged), detail
-
-
-def ago_text(seconds):
-    seconds = max(0, int(seconds))
-    if seconds < 5:
-        return '刚刚'
-    if seconds < 60:
-        return '%d 秒前' % seconds
-    if seconds < 3600:
-        return '%d 分钟前' % (seconds // 60)
-    return '%d 小时前' % (seconds // 3600)
+def banner_text(overall, stamp, rows):
+    """Headline (the overall state) and the problem items, worst first; detail is empty when none."""
+    if not stamp:
+        return '正在读取…', ''
+    detail = '、'.join(row['label'] + ' ' + STATE_TEXT.get(row['state'], row['state'])
+                      for row in problems(rows))
+    return OVERALL_TEXT.get(overall, OVERALL_TEXT['unknown']), detail
 
 
 def validate_settings(interval, cooldown, notify_states):
@@ -358,6 +325,7 @@ def run(cfg, config_path, tray=False, start_hidden=False):
     state_path = state_dir / 'state.json'
     show_path = state_dir / 'show.request'
     store = engine.Store(cfg, state_path)
+    history = monitor_history.History(monitor_history.history_path(config_path)).open()
     # The first collection runs in the loop thread so the window appears without waiting for PowerShell.
     threading.Thread(target=store.loop, daemon=True).start()
     box = {'child': engine.spawn_tray(state_path, '', cfg, show_file=show_path)
@@ -489,8 +457,6 @@ def run(cfg, config_path, tray=False, start_hidden=False):
     brand_text.pack(side='left')
     tk.Label(brand_text, text=engine.APP_NAME, bg=PALETTE['sidebar'], fg=PALETTE['sidebar_text'],
              font=(serif, 15)).pack(anchor='w')
-    tk.Label(brand_text, text='只读监测', bg=PALETTE['sidebar'], fg=PALETTE['sidebar_muted'],
-             font=(ui, 9)).pack(anchor='w', pady=(1, 0))
 
     header = tk.Frame(content, bg=PALETTE['paper'], padx=px(26), pady=px(18))
     header.pack(fill='x')
@@ -498,18 +464,12 @@ def run(cfg, config_path, tray=False, start_hidden=False):
     header_left.pack(side='left')
     tk.Label(header_left, text='本机防护', bg=PALETTE['paper'], fg=PALETTE['ink'],
              font=(ui, 18, 'bold')).pack(anchor='w')
-    subtitle = tk.Label(header_left, text='正在读取本机状态…', bg=PALETTE['paper'],
+    subtitle = tk.Label(header_left, text='正在读取…', bg=PALETTE['paper'],
                         fg=PALETTE['muted'], font=(ui, 9))
     subtitle.pack(anchor='w', pady=(3, 0))
 
-    pill = tk.Canvas(header, width=px(140), height=px(38), bg=PALETTE['paper'], highlightthickness=0)
-    pill.pack(side='right')
-    pill_shape = pill.create_polygon(rounded_points(0, 0, px(140), px(38), px(19)),
-                                     smooth=True, fill=COLORS['unknown'])
-    pill_text = pill.create_text(px(70), px(19), text='正在读取…', fill='#ffffff',
-                                 font=(ui, 10, 'bold'))
-
-    status_label = tk.Label(content, text=IDLE_STATUS, anchor='w', padx=px(26), pady=px(8),
+    # Transient messages only; empty when idle.
+    status_label = tk.Label(content, text='', anchor='w', padx=px(26), pady=px(4),
                             bg=PALETTE['paper'], fg=PALETTE['muted'], font=(ui, 9))
     status_label.pack(side='bottom', fill='x')
 
@@ -588,7 +548,7 @@ def run(cfg, config_path, tray=False, start_hidden=False):
             status('开机自启未变更：' + str(error))
             return
         log.add('启动', '已开启开机自启' if want else '已关闭开机自启')
-        status('已开启开机自启：登录后自动打开面板到托盘' if want else '已关闭开机自启')
+        status('已开启开机自启' if want else '已关闭开机自启')
 
     def check_autostart():
         try:
@@ -633,15 +593,21 @@ def run(cfg, config_path, tray=False, start_hidden=False):
     autostart_switch = Switch(autostart_row, autostart_var, toggle_autostart, PALETTE['sidebar'])
     autostart_switch.pack(side='right')
     autostart_label.bind('<Button-1>', lambda _event: autostart_switch.flip())
-    tk.Label(footer, text='登录后自动打开到托盘', bg=PALETTE['sidebar'],
-             fg=PALETTE['sidebar_muted'], font=(ui, 8)).pack(anchor='w', pady=(px(4), 0))
 
     # Status page: summary banner and check cards share one scrolling canvas.
     cards_page = pages['状态']
     canvas = tk.Canvas(cards_page, bg=PALETTE['paper'], highlightthickness=0)
     card_scroll = ttk.Scrollbar(cards_page, orient='vertical', command=canvas.yview)
-    canvas.configure(yscrollcommand=card_scroll.set)
-    card_scroll.pack(side='right', fill='y', pady=px(6))
+    def card_scroll_set(first, last):
+        # Show the scrollbar only when the cards do not fit (the window is sized so they do).
+        card_scroll.set(first, last)
+        needed = float(first) > 0 or float(last) < 1
+        if needed and not card_scroll.winfo_ismapped():
+            card_scroll.pack(side='right', fill='y', pady=px(6), before=canvas)
+        elif not needed and card_scroll.winfo_ismapped():
+            card_scroll.pack_forget()
+
+    canvas.configure(yscrollcommand=card_scroll_set)
     canvas.pack(side='left', fill='both', expand=True)
     cards_grid = tk.Frame(canvas, bg=PALETTE['paper'], padx=px(4), pady=px(4))
     grid_window = canvas.create_window((0, 0), window=cards_grid, anchor='nw')
@@ -659,8 +625,8 @@ def run(cfg, config_path, tray=False, start_hidden=False):
 
     class Banner(tk.Canvas):
         def __init__(self, parent):
-            super().__init__(parent, bg=PALETTE['paper'], highlightthickness=0, height=px(76))
-            self.state, self.headline, self.detail = 'unknown', *summary_text([])
+            super().__init__(parent, bg=PALETTE['paper'], highlightthickness=0, height=px(52))
+            self.state, self.headline, self.detail = 'unknown', '正在读取…', ''
             self.bind('<Configure>', lambda _event: self.draw())
 
         def set(self, state, headline, detail):
@@ -677,22 +643,25 @@ def run(cfg, config_path, tray=False, start_hidden=False):
             self.create_polygon(rounded_points(1, 1, width - 2, height - 2, px(12)), smooth=True,
                                 fill=TINTS.get(self.state, TINTS['unknown']), outline='')
             self.create_rectangle(px(1), px(14), px(5), height - px(14), fill=color, outline='')
-            self.create_text(px(22), px(26), text=self.headline, anchor='w',
-                             font=(ui, 12, 'bold'), fill=color)
-            self.create_text(px(22), px(52), text=self.detail, anchor='w', font=(ui, 9),
-                             fill=PALETTE['ink'], width=width - px(44))
+            title = self.create_text(px(22), height // 2, text=self.headline, anchor='w',
+                                     font=(ui, 12, 'bold'), fill=color)
+            left = self.bbox(title)[2] + px(14)
+            self.create_text(left, height // 2, text=self.detail, anchor='w', font=(ui, 9),
+                             fill=PALETTE['ink'])
 
     class Card(tk.Canvas):
         def __init__(self, parent, check_id):
-            super().__init__(parent, bg=PALETTE['paper'], highlightthickness=0, height=px(100))
+            super().__init__(parent, bg=PALETTE['paper'], highlightthickness=0, height=px(54),
+                             cursor='hand2')
+            self.check_id = check_id
             self.title = LABELS[check_id]
-            self.description = DESCRIPTIONS.get(check_id, '')
             self.state = 'unknown'
             self.code = '—'
             self.hover = False
             self.bind('<Configure>', lambda _event: self.draw())
             self.bind('<Enter>', lambda _event: self.set_hover(True))
             self.bind('<Leave>', lambda _event: self.set_hover(False))
+            self.bind('<Button-1>', lambda _event: show_guide(self.check_id, self.state, self.code))
 
         def set_hover(self, value):
             self.hover = value
@@ -712,25 +681,21 @@ def run(cfg, config_path, tray=False, start_hidden=False):
             color = COLORS.get(self.state, COLORS['unknown'])
             problem = self.state != 'ok'
             fill = PALETTE['card_hover'] if self.hover else PALETTE['card']
-            self.create_polygon(rounded_points(1, 1, width - 2, height - 2, px(12)), smooth=True,
-                                fill=fill, outline=color if problem else PALETTE['line'],
-                                width=2 if problem and self.state != 'unknown' else 1)
+            self.create_polygon(rounded_points(1, 1, width - 2, height - 2, px(10)), smooth=True,
+                                fill=fill, outline=color if self.state == 'fail' else PALETTE['line'])
             if problem:
-                self.create_rectangle(px(1), px(16), px(4), height - px(16), fill=color, outline='')
-            self.create_text(px(20), px(25), text=self.title, anchor='w',
+                self.create_rectangle(px(1), px(14), px(4), height - px(14), fill=color, outline='')
+            self.create_text(px(18), height // 2, text=self.title, anchor='w',
                              font=(ui, 11, 'bold'), fill=PALETTE['ink'])
-            chip(self, width - px(14), px(14), STATE_TEXT.get(self.state, self.state), self.state)
-            self.create_text(px(20), px(51), text=self.description, anchor='w',
-                             font=(ui, 9), fill=PALETTE['muted'], width=width - px(36))
-            self.create_text(px(20), px(77), text=self.code, anchor='w',
-                             font=(mono, 8), fill=color if problem else PALETTE['faint'])
+            chip(self, width - px(14), height // 2 - px(11), STATE_TEXT.get(self.state, self.state),
+                 self.state)
 
     banner = Banner(cards_grid)
-    banner.grid(row=0, column=0, columnspan=2, sticky='ew', padx=px(7), pady=(px(6), px(8)))
+    banner.grid(row=0, column=0, columnspan=2, sticky='ew', padx=px(6), pady=(0, px(6)))
     cards = {}
     for index, check_id in enumerate(engine.CHECK_IDS):
         card = Card(cards_grid, check_id)
-        card.grid(row=1 + index // 2, column=index % 2, sticky='nsew', padx=px(7), pady=px(6))
+        card.grid(row=1 + index // 2, column=index % 2, sticky='nsew', padx=px(6), pady=px(6))
         cards[check_id] = card
     cards_grid.columnconfigure(0, weight=1, uniform='cards')
     cards_grid.columnconfigure(1, weight=1, uniform='cards')
@@ -745,9 +710,6 @@ def run(cfg, config_path, tray=False, start_hidden=False):
     log_page = pages['日志']
     log_bar = tk.Frame(log_page, bg=PALETTE['paper'])
     log_bar.pack(fill='x', pady=(px(6), 0))
-    log_hint = tk.Label(log_bar, text='最近 %d 条事件，仅保存在本次运行的内存中' % log.rows.maxlen,
-                        bg=PALETTE['paper'], fg=PALETTE['muted'], font=(ui, 9))
-    log_hint.pack(side='left', padx=(px(2), 0))
     log_frame = tk.Frame(log_page, bg=PALETTE['card'], highlightthickness=1,
                          highlightbackground=PALETTE['line'])
     log_frame.pack(fill='both', expand=True, pady=px(6))
@@ -808,11 +770,6 @@ def run(cfg, config_path, tray=False, start_hidden=False):
                    for name in ('fail', 'degraded', 'unknown')}
     pause_var = tk.BooleanVar(value=bool(cfg['alerts'].get('paused', False)))
 
-    def section(row, text, first=False):
-        tk.Label(settings, text=text, bg=PALETTE['card'], fg=PALETTE['ink'], anchor='w',
-                 font=(ui, 11, 'bold')).grid(row=row, column=0, columnspan=3, sticky='w',
-                                             pady=(0 if first else px(18), px(6)))
-
     def field(row, text, widget, hint):
         tk.Label(settings, text=text, bg=PALETTE['card'], fg=PALETTE['ink'], anchor='w',
                  font=(ui, 10)).grid(row=row, column=0, sticky='w', pady=px(5),
@@ -821,25 +778,19 @@ def run(cfg, config_path, tray=False, start_hidden=False):
         tk.Label(settings, text=hint, bg=PALETTE['card'], fg=PALETTE['muted'], anchor='w',
                  font=(ui, 9)).grid(row=row, column=2, sticky='w', padx=(px(12), 0))
 
-    section(0, '采集与通知', first=True)
     field(1, '采集间隔', ttk.Spinbox(settings, from_=2, to=3600, width=7,
-                                     textvariable=interval_var, font=(ui, 10)), '秒，2–3600')
+                                     textvariable=interval_var, font=(ui, 10)), '秒')
     field(2, '通知冷却', ttk.Spinbox(settings, from_=0, to=86400, width=7,
-                                     textvariable=cooldown_var, font=(ui, 10)),
-          '秒，0–86400；同一项在冷却内只提醒一次')
-    section(3, '这些状态出现时提醒')
+                                     textvariable=cooldown_var, font=(ui, 10)), '秒')
+    tk.Label(settings, text='提醒', bg=PALETTE['card'], fg=PALETTE['ink'], anchor='w',
+             font=(ui, 10)).grid(row=3, column=0, sticky='w', pady=px(5))
     checks_row = tk.Frame(settings, bg=PALETTE['card'])
-    checks_row.grid(row=4, column=0, columnspan=3, sticky='w')
+    checks_row.grid(row=3, column=1, columnspan=2, sticky='w')
     for name in ('fail', 'degraded', 'unknown'):
         ttk.Checkbutton(checks_row, text=STATE_TEXT[name], variable=notify_vars[name]).pack(
             side='left', padx=(0, px(22)))
-    ttk.Checkbutton(settings, text='暂停提醒（托盘与面板同时生效，监测照常进行）',
-                    variable=pause_var).grid(row=5, column=0, columnspan=3, sticky='w',
-                                             pady=(px(8), 0))
-    tk.Label(settings, text='开机自启在左侧栏底部切换；开启后登录 Windows 会自动打开面板并隐藏到托盘。',
-             bg=PALETTE['card'], fg=PALETTE['muted'], font=(ui, 9),
-             wraplength=px(620), justify='left').grid(row=6, column=0, columnspan=3, sticky='w',
-                                                      pady=(px(8), 0))
+    ttk.Checkbutton(settings, text='暂停提醒', variable=pause_var).grid(
+        row=4, column=1, columnspan=2, sticky='w', pady=(px(4), 0))
 
     status_token = {'value': 0}
 
@@ -850,8 +801,8 @@ def run(cfg, config_path, tray=False, start_hidden=False):
 
         def reset():
             if status_token['value'] == token:
-                status_label.configure(text=IDLE_STATUS)
-        root.after(6000, reset)
+                status_label.configure(text='')
+        root.after(4000, reset)
 
     def apply_from_form():
         try:
@@ -898,13 +849,7 @@ def run(cfg, config_path, tray=False, start_hidden=False):
     actions.grid(row=8, column=0, columnspan=3, sticky='w')
     button(actions, '应用', on_apply, primary=True).pack(side='left', padx=(0, px(8)))
     button(actions, '保存到配置', on_save).pack(side='left', padx=(0, px(8)))
-    button(actions, '打开配置', on_open_config).pack(side='left')
-    tk.Label(settings, text='“应用”只影响本次运行；“保存到配置”会校验后写入配置文件。',
-             bg=PALETTE['card'], fg=PALETTE['muted'], font=(ui, 9)).grid(
-        row=9, column=0, columnspan=3, sticky='w', pady=(px(10), 0))
-    tk.Label(settings, text='配置文件：' + str(config_path), bg=PALETTE['card'],
-             fg=PALETTE['faint'], font=(mono, 8), wraplength=px(640),
-             justify='left').grid(row=10, column=0, columnspan=3, sticky='w', pady=(px(4), 0))
+    button(actions, '打开配置文件', on_open_config).pack(side='left')
 
     refresh_button = button(header, '立即采集', on_refresh, bg=PALETTE['soft'])
     refresh_button.pack(side='right', padx=(0, px(12)))
@@ -914,12 +859,9 @@ def run(cfg, config_path, tray=False, start_hidden=False):
         value = state.get('overall', 'unknown')
         stamp = state.get('checked_at')
         rendered['stamp'] = stamp or 0
-        rendered['target'] = state.get('target_ref') or cfg.get('target') or '—'
-        pill.itemconfigure(pill_shape, fill=COLORS.get(value, COLORS['unknown']))
-        pill.itemconfigure(pill_text, text=OVERALL_TEXT.get(value, '状态未知') if stamp else '正在读取…')
         rows_now = build_rows(state)
         flagged = problems(rows_now)
-        headline, detail = summary_text(rows_now)
+        headline, detail = banner_text(value, stamp, rows_now)
         banner.set(value if stamp else 'unknown', headline, detail)
         set_badge(len(flagged), flagged[0]['state'] if flagged else 'ok')
         if rendered['icon'] != value:
@@ -938,6 +880,8 @@ def run(cfg, config_path, tray=False, start_hidden=False):
             if event['to'] in cfg['alerts']['notify_states'] and not cfg['alerts'].get('paused'):
                 status(event_text(event))
         rendered['states'] = current
+        if stamp:
+            history.record(current)
 
         rebuild, fresh = log_delta(rendered['log'], log)
         if rebuild or fresh:
@@ -946,14 +890,37 @@ def run(cfg, config_path, tray=False, start_hidden=False):
 
     def render_subtitle():
         stamp = rendered['stamp']
-        counts = tally(rendered['rows']) if rendered['rows'] else None
-        text = '上次采集 ' + (time.strftime('%H:%M:%S', time.localtime(stamp)) + '（' +
-                            ago_text(time.time() - stamp) + '）' if stamp else '—')
-        text += ' · 目标 ' + str(rendered['target'])
-        if counts:
-            text += ' · 正常 %d / 降级 %d / 失效 %d / 未知 %d' % (
-                counts['ok'], counts['degraded'], counts['fail'], counts['unknown'])
-        subtitle.configure(text=text)
+        subtitle.configure(text='上次采集 ' + time.strftime('%H:%M:%S', time.localtime(stamp))
+                           if stamp else '正在读取…')
+
+    def show_guide(check_id, state_name, code):
+        """What the check looks at and what to do now (the history view is in the WebView panel)."""
+        info = monitor_guide.guide(check_id, state_name, code)
+        dialog = tk.Toplevel(root)
+        dialog.title(LABELS[check_id])
+        dialog.configure(bg=PALETTE['card'])
+        dialog.resizable(False, False)
+        dialog.transient(root)
+        head = tk.Frame(dialog, bg=PALETTE['card'])
+        head.pack(fill='x', padx=px(24), pady=(px(20), px(6)))
+        tk.Label(head, text=LABELS[check_id], bg=PALETTE['card'], fg=PALETTE['ink'],
+                 font=(ui, 13, 'bold')).pack(side='left')
+        tk.Label(head, text=STATE_TEXT.get(state_name, state_name),
+                 bg=TINTS.get(state_name, TINTS['unknown']), fg=COLORS.get(state_name, COLORS['unknown']),
+                 font=chip_font, padx=px(8)).pack(side='left', padx=(px(10), 0))
+        tk.Label(dialog, text=info['checks'], bg=PALETTE['card'], fg=PALETTE['muted'], font=(ui, 9),
+                 wraplength=px(380), justify='left').pack(anchor='w', padx=px(24))
+        for index, step in enumerate(info['steps'], 1):
+            tk.Label(dialog, text='%d. %s' % (index, step.replace('`', '')), bg=PALETTE['card'],
+                     fg=PALETTE['ink'], font=(ui, 10), wraplength=px(380), justify='left').pack(
+                anchor='w', padx=px(24), pady=(px(8) if index == 1 else px(3), 0))
+        tk.Label(dialog, text=code, bg=PALETTE['card'], fg=PALETTE['faint'], font=(mono, 8)).pack(
+            anchor='w', padx=px(24), pady=(px(12), 0))
+        button(dialog, '关闭', dialog.destroy).pack(anchor='e', padx=px(20), pady=px(16))
+        dialog.bind('<Escape>', lambda _event: dialog.destroy())
+        dialog.update_idletasks()
+        dialog.geometry('+%d+%d' % (root.winfo_rootx() + px(160), root.winfo_rooty() + px(80)))
+        dialog.focus_set()
 
     def show_window():
         try:
@@ -971,18 +938,11 @@ def run(cfg, config_path, tray=False, start_hidden=False):
         dialog.resizable(False, False)
         dialog.transient(root)
         choice = {'value': None}
-        question = ('要隐藏到托盘继续监测，还是直接关闭？' if 'hide' in choices
-                    else '关闭后监测会停止。确定关闭吗？')
-        detail = ('隐藏后托盘盾牌图标继续按状态变色并提醒；直接关闭会停止监测。' if 'hide' in choices
-                  else '本次未启动托盘，窗口隐藏后将无法找回；需要后台提醒请用 --tray 启动。')
+        question = '隐藏到托盘继续监测，还是退出？' if 'hide' in choices else '退出后监测会停止。'
         tk.Label(dialog, text=question, bg=PALETTE['card'],
                  fg=PALETTE['ink'], font=(ui, 11, 'bold'),
                  wraplength=px(400), justify='left').pack(
-            anchor='w', padx=px(26), pady=(px(22), px(6)))
-        tk.Label(dialog, text=detail,
-                 bg=PALETTE['card'], fg=PALETTE['muted'], font=(ui, 9),
-                 wraplength=px(400), justify='left').pack(
-            anchor='w', padx=px(26), pady=(0, px(18)))
+            anchor='w', padx=px(26), pady=(px(22), px(18)))
         row = tk.Frame(dialog, bg=PALETTE['card'])
         row.pack(fill='x', padx=px(20), pady=(0, px(20)))
 
@@ -991,7 +951,7 @@ def run(cfg, config_path, tray=False, start_hidden=False):
             dialog.destroy()
 
         button(row, '取消', lambda: pick(None), bg=PALETTE['soft']).pack(side='right', padx=px(6))
-        button(row, '直接关闭', lambda: pick('exit'), primary='hide' not in choices).pack(
+        button(row, '退出', lambda: pick('exit'), primary='hide' not in choices).pack(
             side='right', padx=px(6))
         if 'hide' in choices:
             button(row, '隐藏到托盘', lambda: pick('hide'), primary=True).pack(side='right',
@@ -1010,6 +970,7 @@ def run(cfg, config_path, tray=False, start_hidden=False):
 
     def shutdown():
         store.stop.set()
+        history.close()
         if box['child'] is not None:
             box['child'].terminate()
         root.destroy()
@@ -1025,6 +986,17 @@ def run(cfg, config_path, tray=False, start_hidden=False):
             log.add('面板', '已隐藏到托盘，监测继续')
         elif choice == 'exit':
             shutdown()
+
+    def fit_to_content():
+        """Size the window so the status page shows every card without scrolling."""
+        root.update_idletasks()
+        needed = (header.winfo_reqheight() + cards_grid.winfo_reqheight() + px(4) * 2
+                  + status_label.winfo_reqheight() + px(12))
+        side = sum(child.winfo_reqheight() for child in sidebar.winfo_children()) + px(80)
+        width, height = px(900), min(max(needed, side), screen_h - 80)
+        root.minsize(min(px(720), width), min(px(460), height))
+        root.geometry('%dx%d+%d+%d' % (width, height, max(0, (screen_w - width) // 2),
+                                       max(0, (screen_h - height) // 3)))
 
     def tick():
         if autostart_state['checked'] and not autostart_state['applied']:
@@ -1049,9 +1021,10 @@ def run(cfg, config_path, tray=False, start_hidden=False):
 
     root.protocol('WM_DELETE_WINDOW', on_close)
     root.bind('<F5>', lambda _event: on_refresh())
-    log.add('启动', '监测已启动；界面字体 ' + ui)
+    log.add('启动', '监测已启动')
     if start_hidden and tray_alive():
         root.withdraw()
         log.add('面板', '已隐藏到托盘，监测继续')
     tick()
+    fit_to_content()
     root.mainloop()

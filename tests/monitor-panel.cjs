@@ -7,11 +7,18 @@ assert.equal(panel.stateClass('fail'), 'fail');
 assert.equal(panel.stateClass('weird'), 'unknown');
 assert.equal(panel.stateClass(undefined), 'unknown');
 
-const empty = panel.subtitleText({checked_at: 0, target: 'demo', rows: []});
-assert.equal(empty, '上次采集 — · 目标 demo');
-const full = panel.subtitleText({checked_at: 1700000000, ago: '刚刚', target: 'demo',
-  rows: [{}], counts: {ok: 7, degraded: 1, fail: 1, unknown: 1}});
-assert.match(full, /（刚刚） · 目标 demo · 正常 7 \/ 降级 1 \/ 失效 1 \/ 未知 1$/);
+assert.equal(panel.subtitleText({checked_at: 0}), '正在读取…');
+assert.match(panel.subtitleText({checked_at: 1700000000}), /^上次采集 \d\d:\d\d:\d\d$/);
+
+const blocks = panel.barBlocks([{s: 0, e: 50, state: 'ok'}, {s: 50, e: 60, state: 'fail'},
+  {s: 80, e: 80, state: 'ok'}, {s: -50, e: 10, state: 'weird'}], 100, 100);
+assert.deepEqual(blocks.map(b => [b.left, b.width, b.state]), [[0, 50, 'ok'], [50, 10, 'fail'], [0, 10, 'unknown']]);
+assert.match(blocks[1].title, /失效$/);
+assert.match(panel.barBlocks([{s: 0, e: 3600, state: 'ok'}], 604800, 604800)[0].title, /^\d+\/\d+ /);
+
+assert.deepEqual(panel.codeParts('改配置里的 `a.b`。'), [
+  {code: false, text: '改配置里的 '}, {code: true, text: 'a.b'}, {code: false, text: '。'}]);
+assert.deepEqual(panel.codeParts('no code'), [{code: false, text: 'no code'}]);
 
 const rows = [{text: 'a'}, {text: 'b'}];
 assert.deepEqual(panel.mergeLog(rows, {rebuild: false, rows: [{text: 'c'}]}, 10).map(r => r.text), ['a', 'b', 'c']);

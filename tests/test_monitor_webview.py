@@ -79,22 +79,19 @@ class Snapshot(Base):
     def test_before_first_collection(self):
         snap = self.api.snapshot(0)
         self.assertEqual(snap['overall'], 'unknown')
-        self.assertEqual(snap['overall_text'], '正在读取…')
         self.assertEqual(snap['rows'], [])
-        self.assertIn('正在读取', snap['headline'])
+        self.assertEqual((snap['headline'], snap['detail']), ('正在读取…', ''))
 
-    def test_rows_summary_badge_and_counts(self):
+    def test_rows_banner_and_badge(self):
         self.store.state = failing_state()
         snap = self.api.snapshot(0)
-        self.assertEqual(snap['overall_text'], '防护已失效')
-        self.assertEqual(snap['ago'], '42 秒前')
+        self.assertEqual(snap['headline'], '防护已失效')
+        self.assertEqual(snap['detail'], '防火墙默认阻止 失效、核心 IPv6 降级')
         self.assertEqual(snap['problems'], 2)
         self.assertEqual(snap['worst'], 'fail')
-        self.assertEqual(snap['counts']['fail'], 1)
-        self.assertEqual(snap['headline'], '2 项需要关注')
         row = snap['rows'][1]
         self.assertEqual((row['label'], row['state_text']), ('防火墙默认阻止', '失效'))
-        self.assertTrue(row['description'])
+        self.assertFalse({'ago', 'counts', 'target'} & set(snap))
         json.dumps(snap, ensure_ascii=False)
 
     def test_state_changes_become_log_rows_and_delta_is_incremental(self):
@@ -131,7 +128,6 @@ class Settings(Base):
         view = self.api.settings()
         self.assertEqual(view['interval'], 5)
         self.assertEqual(view['notify'], {'fail': True, 'degraded': True, 'unknown': False})
-        self.assertEqual(view['config_path'], str(self.path))
 
     def test_apply_changes_runtime_only(self):
         before = self.path.read_bytes()
@@ -212,6 +208,69 @@ class Actions(Base):
     def test_only_page_methods_are_public(self):
         public = {name for name in vars(self.api) if not name.startswith('_')}
         self.assertEqual(public, set(), 'pywebview would expose these attributes to the page')
+
+
+class HistoryAndDetail(Base):
+    def setUp(self):
+        super().setUp()
+        import monitor_history
+        self.now = [1000.0]
+        self.history = monitor_history.History(self.dir / 'history.jsonl', clock=lambda: self.now[0]).open()
+        self.api._history = self.history
+        self.api._clock = lambda: self.now[0]
+
+    def test_record_only_after_first_collection(self):
+        self.api._record()
+        self.assertEqual([r for r in self.history.snapshot() if 'id' in r], [])
+        self.store.state = failing_state()
+        self.api._record()
+        self.assertEqual(len([r for r in self.history.snapshot() if 'id' in r]), 3)
+
+    def test_detail_has_guidance_and_own_timeline(self):
+        self.store.state = failing_state()
+        self.api._record()
+        self.now[0] = 1600
+        detail = self.api.detail('firewall_block')
+        self.assertEqual((detail['label'], detail['state'], detail['state_text']), ('防火墙默认阻止', 'fail', '失效'))
+        self.assertTrue(detail['checks'])
+        self.assertEqual(detail['segments'], [{'s': 1000, 'e': 1600, 'state': 'fail'}])
+        self.assertEqual(detail['window'], 86400)
+        self.assertIsNone(self.api.detail('not_a_check'))
+        json.dumps(detail, ensure_ascii=False)
+
+    def test_timeline_covers_every_check_and_only_known_spans(self):
+        self.store.state = failing_state()
+        self.api._record()
+        data = self.api.timeline(604800)
+        self.assertEqual(data['window'], 604800)
+        self.assertEqual([row['id'] for row in data['rows']], list(engine.CHECK_IDS))
+        self.assertEqual(self.api.timeline(12345)['window'], 86400)
+
+    def test_fit_resizes_by_the_missing_content_size(self):
+        window = types.SimpleNamespace(width=1000, height=700, sizes=[])
+        window.resize = lambda w, h: window.sizes.append((w, h))
+        self.api._bind(window, None)
+        self.api._screen = (1920, 1080)
+        result = self.api.fit(900, 480, 986, 663)
+        self.assertEqual(window.sizes, [(914, 517)])
+        self.assertTrue(result['ok'])
+        self.api._screen = (800, 500)
+        self.api.fit(900, 480, 986, 663)
+        self.assertEqual(window.sizes[-1], (752, 470))
+
+    def test_fit_without_window_is_a_no_op(self):
+        self.assertEqual(self.api.fit(900, 480, 986, 663), {'ok': False})
+
+    def test_bridge_parameters_do_not_shadow_js_globals(self):
+        # Regression: pywebview turns parameter names into JS parameter names; one named `window`
+        # made window.pywebview undefined inside the stub and the history page stayed empty.
+        import inspect
+        reserved = {'window', 'document', 'self', 'globalThis', 'location', 'history', 'name', 'top'}
+        for name, method in inspect.getmembers(web.PanelApi, inspect.isfunction):
+            if name.startswith('_'):
+                continue
+            params = set(inspect.signature(method).parameters) - {'self'}
+            self.assertFalse(params & reserved, name)
 
 
 class Fonts(unittest.TestCase):
@@ -300,6 +359,10 @@ class Page(unittest.TestCase):
             text = (ASSETS / name).read_text(encoding='utf-8')
             for marker in ('http://', 'https://', 'fetch(', 'XMLHttpRequest', 'WebSocket', '@import'):
                 self.assertNotIn(marker, text, name)
+
+    def test_page_text_avoids_middle_dots(self):
+        for name in ('panel.html', 'panel.js'):
+            self.assertNotIn('·', (ASSETS / name).read_text(encoding='utf-8'), name)
 
     def test_css_body_font_is_cjk_first(self):
         css = (ASSETS / 'panel.css').read_text(encoding='utf-8')
