@@ -1,3 +1,5 @@
+> **CCGuard has moved to its own repository, [SumitaRinku/CCGuard](https://github.com/SumitaRinku/CCGuard)**, where new versions, installers and issues live. This repository is archived read-only and kept as a historical record.
+
 <div align="center">
 
 <img src="skills/claude-guardian/assets/monitor/logo-ok.png" width="96" height="96" alt="CCGuard shield">

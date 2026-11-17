@@ -1,3 +1,5 @@
+> **CCGuard 已搬到独立仓库 [SumitaRinku/CCGuard](https://github.com/SumitaRinku/CCGuard)**，新版本、安装程序和问题反馈都在那里。本仓库已归档为只读，内容保留作为历史记录。
+
 <div align="center">
 
 <img src="skills/claude-guardian/assets/monitor/logo-ok.png" width="96" height="96" alt="CCGuard shield">
