@@ -79,9 +79,9 @@ The monitor uses only the Python standard library; no third-party dependency is 
 
 **Option A: release package (recommended; double-click and go)**
 
-Recommended: download [`CCGuard-Setup-0.5.1.exe`](https://github.com/SumitaRinku/CCguard/releases/download/v0.5.1/CCGuard-Setup-0.5.1.exe) and run it. It needs neither Python nor administrator rights: it installs for the current user into `%LOCALAPPDATA%\Programs\CCGuard` with Start menu and desktop shortcuts, and can be removed from Settings > Apps. Uninstalling removes the program, its shortcuts and the autostart entry, and keeps your `monitor.json` and `history.jsonl`. The installer is built from source on GitHub Actions and attached to the release only after a silent install, self-test and uninstall pass; `SHA256SUMS-installer-0.5.1.txt` holds its hash. It is not code-signed, so SmartScreen may show "Windows protected your PC" on first run: choose "More info > Run anyway".
+Recommended: download [`CCGuard-Setup-0.6.0.exe`](https://github.com/SumitaRinku/CCguard/releases/download/v0.6.0/CCGuard-Setup-0.6.0.exe) and run it. It needs neither Python nor administrator rights: it installs for the current user into `%LOCALAPPDATA%\Programs\CCGuard` with Start menu and desktop shortcuts, and can be removed from Settings > Apps. Uninstalling removes the program, its shortcuts and the autostart entry, and keeps your `monitor.json` and `history.jsonl`. The installer is built from source on GitHub Actions and attached to the release only after a silent install, self-test and uninstall pass; `SHA256SUMS-installer-0.6.0.txt` holds its hash. It is not code-signed, so SmartScreen may show "Windows protected your PC" on first run: choose "More info > Run anyway".
 
-Python package: download [`claude-guardian-0.5.1.zip`](https://github.com/SumitaRinku/CCguard/releases/download/v0.5.1/claude-guardian-0.5.1.zip), extract it, and double-click `CCGuard.pyw` or `CCGuard.cmd` inside `claude-guardian\`.
+Python package: download [`claude-guardian-0.6.0.zip`](https://github.com/SumitaRinku/CCguard/releases/download/v0.6.0/claude-guardian-0.6.0.zip), extract it, and double-click `CCGuard.pyw` or `CCGuard.cmd` inside `claude-guardian\`.
 
 **Option B: clone the repository (latest source)**
 
@@ -349,7 +349,7 @@ python tools/package_skill.py --output <new.zip>
 ```
 
 - CI runs on Linux, macOS, Windows and Python 3.10 Linux; `tools/ci_scope.py` distinguishes docs-only from code pushes.
-- Current version `0.6.0` (see Releases once published); `v0.5.1` made the setup wizard Simplified Chinese; since `v0.5.0` there is a Windows installer (no Python needed) and the data-source note on the exit page; since `v0.4.0` it includes the WebView UI, CJK fonts, state history, fix guidance, detection logs and the exit score. See [CHANGELOG.md](CHANGELOG.md) for the full record and [docs/decisions.md](docs/decisions.md) for design trade-offs.
+- Latest release `v0.6.0`: runtime-config discovery (fixes three checks showing unknown in the installed app), version number, update check and update log; `v0.5.1` made the setup wizard Simplified Chinese; since `v0.5.0` there is a Windows installer (no Python needed) and the data-source note on the exit page; since `v0.4.0` it includes the WebView UI, CJK fonts, state history, fix guidance, detection logs and the exit score. See [CHANGELOG.md](CHANGELOG.md) for the full record and [docs/decisions.md](docs/decisions.md) for design trade-offs.
 
 ## The full Claude-Guardian Skill
 
