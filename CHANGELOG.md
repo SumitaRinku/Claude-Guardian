@@ -1,5 +1,14 @@
 # 版本记录
 
+## CI：只改 CCGuard 时不跑 macOS（2026-11-17，CI-SCOPE-CCGUARD-20261117，ADR-085）
+
+- `tools/ci_scope.py` 新增 `windows` 档（Linux + Windows）：一次推送只改了 CCGuard 文件（`monitor*.py`、`ip_score.py`、`app_update.py`、`version.py`、`assets/monitor/`、`packaging/`、`tools/build_windows.py`、`windows-installer.yml`、启动器、构建依赖、`.gitignore` 及对应测试）和文档时，不再排队等 macOS 运行器。改到 Skill 其他脚本、macOS 脚本、共用工具（如 `package_skill.py`、`ci_scope.py`）、其他工作流或 `.gitattributes` 时仍跑三平台；只改文档仍只跑 Linux
+- 依据：CCGuard 只支持 Windows，它的测试没有一项依赖 macOS；macOS 运行器经常长时间排队（上一次排队 15 分钟后被取消、一步未跑）。Skill 的 macOS 脚本（PF 断网保护、`native_*_mac.py`）继续在 macOS 上测
+- AGENTS.md、CLAUDE.md 的推送 CI 规则同步改为三档，经用户确认；README 中英文的 CI 说明同步
+- 测试：`tests/test_ci_scope.py` 新增只改 CCGuard 走 `windows` 档、混入 Skill 或共用代码仍走三平台、仓库里每个 macOS 相关文件都走三平台；用上一次推送（字体打包，14 个文件）实测判定为 `windows`
+- 验证：Windows 11 本机 `python -m unittest discover -s tests` 1842 项通过（442 项 POSIX 专属跳过），其中 `tests.test_ci_scope` 9 项；`tools/ci_scope.py` 对上一次推送（`a829fd6..4fcc2e9`）判定为 `windows`。本次推送改了 `ci_scope.py` 本身，按规则仍跑三平台
+- 风险与回滚：CCGuard 文件里若将来加入依赖 macOS 的逻辑，需要把它移出清单；回滚使用普通 revert
+
 ## 0.6.1：安装版自带思源黑体（2026-11-17，MONITOR-FONT-20261117）
 
 - 安装版打包思源黑体 Noto Sans SC 可变字重字体（SIL OFL 1.1）：`tools/build_windows.py` 在构建时从 google/fonts 固定提交 `a85815a4` 下载 `ofl/notosanssc/NotoSansSC[wght].ttf`（17772300 字节）与 `OFL.txt`，校验大小与 SHA-256，存入 `build/fonts/`，已有且哈希一致时不再下载；`ccguard.spec` 打进 `claude-guardian/assets/monitor/fonts/`，缺字体时拒绝构建；字体不进 git（`.gitignore`）

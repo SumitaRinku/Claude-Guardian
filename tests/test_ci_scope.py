@@ -23,6 +23,32 @@ class CiScopeTests(unittest.TestCase):
                      "skills/claude-guardian/assets/webrtc-probe.html", "skills/claude-guardian/assets/vps-firewall/vps-guard.sh"):
             self.assertEqual(ci_scope.classify(["README.md", name])["scope"], "full", name)
 
+    def test_ccguard_only_changes_skip_macos(self):
+        for files in (["skills/claude-guardian/scripts/monitor_webview.py", "CHANGELOG.md"],
+                      ["skills/claude-guardian/assets/monitor/panel.css", "tests/test_monitor_gui.py", ".gitignore"],
+                      ["packaging/ccguard.iss", "tools/build_windows.py", ".github/workflows/windows-installer.yml"],
+                      ["skills/claude-guardian/scripts/version.py", "skills/claude-guardian/assets/monitor/release-notes.json",
+                       "tests/monitor-panel.cjs", "CCGuard.pyw", "requirements-build.txt"]):
+            result = ci_scope.classify(files)
+            self.assertEqual(result["scope"], "windows", files)
+            self.assertEqual(result["os"], ["ubuntu-latest", "windows-latest"])
+
+    def test_skill_or_shared_code_mixed_in_keeps_macos(self):
+        for extra in ("skills/claude-guardian/scripts/native_cleanup_mac.py", "tests/test_mac_pf_killswitch.py",
+                      "skills/claude-guardian/assets/mac-killswitch/guardian-pf-killswitch.sh", "tools/package_skill.py",
+                      "tools/ci_scope.py", ".github/workflows/tests.yml", "skills/claude-guardian/scripts/guardian.py",
+                      "skills/claude-guardian/assets/killswitch/switch.js", "tests/test_guides.py", ".gitattributes"):
+            result = ci_scope.classify(["skills/claude-guardian/scripts/monitor.py", extra])
+            self.assertEqual(result["scope"], "full", extra)
+            self.assertIn("macos-latest", result["os"])
+
+    def test_every_mac_specific_file_keeps_macos(self):
+        tracked = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True).stdout.split()
+        mac = [name for name in tracked if "mac" in name.lower() and not ci_scope.is_doc(name)]
+        self.assertTrue(mac)
+        for name in mac:
+            self.assertEqual(ci_scope.classify([name])["scope"], "full", name)
+
     def test_workflow_markdown_still_runs_full_matrix(self):
         self.assertEqual(ci_scope.classify([".github/ISSUE_TEMPLATE/x.md"])["scope"], "full")
 

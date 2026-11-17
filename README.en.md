@@ -334,7 +334,7 @@ docs/                          decision records and supplementary docs
 **Releasing** (maintainers):
 
 1. Bump `__version__` in `version.py` and add the version's entry at the top of `assets/monitor/release-notes.json` (a test checks they match).
-2. Update CHANGELOG, run the full suite, push to main, and wait for the three-platform CI and the installer build.
+2. Update CHANGELOG, run the full suite, push to main, and wait for the push CI and the installer build.
 3. After the user confirms, publish a GitHub Release tagged `vX.Y.Z`. The `Windows installer` workflow fails if the tag differs from `version.py`; otherwise it builds, verifies and attaches the installer.
 4. Download the published assets, check their hashes, and record the release in CHANGELOG.
 
@@ -348,7 +348,7 @@ python -m compileall -q skills/claude-guardian/scripts
 python tools/package_skill.py --output <new.zip>
 ```
 
-- CI runs on Linux, macOS, Windows and Python 3.10 Linux; `tools/ci_scope.py` distinguishes docs-only from code pushes.
+- CI picks platforms by what changed (`tools/ci_scope.py`): docs only runs Linux; CCGuard only (panel, packaging and their tests) runs Linux and Windows; anything touching the rest of the Skill or shared code runs Linux, macOS and Windows. A Python 3.10 Linux runtime check also runs.
 - Latest release `v0.6.0`: runtime-config discovery (fixes three checks showing unknown in the installed app), version number, update check and update log; `v0.5.1` made the setup wizard Simplified Chinese; since `v0.5.0` there is a Windows installer (no Python needed) and the data-source note on the exit page; since `v0.4.0` it includes the WebView UI, CJK fonts, state history, fix guidance, detection logs and the exit score. See [CHANGELOG.md](CHANGELOG.md) for the full record and [docs/decisions.md](docs/decisions.md) for design trade-offs.
 
 ## The full Claude-Guardian Skill

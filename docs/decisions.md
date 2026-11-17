@@ -721,3 +721,7 @@ tkinter 面板的外观和刷新性能达不到要求（Canvas 手绘卡片、�
 
 更新日志分两份：随程序打包、面向用户的 `release-notes.json`（要点，离线可看），和面向维护者的 CHANGELOG（验证与风险细节）。打包自检和单元测试要求更新日志的首个版本与 `version.py` 一致，发版时必须同时更新。验证见 CHANGELOG，回滚使用普通 revert。
 
+## ADR-085：只改 CCGuard 时 CI 不跑 macOS（2026-11-17，CI-SCOPE-CCGUARD-20261117）
+
+ADR-051 规定非文档改动跑三平台。CCGuard 只支持 Windows，测试不依赖 macOS，而 macOS 托管运行器常常长时间排队，拖慢每次面板改动的交付。经用户确认，`tools/ci_scope.py` 增加一档：只改 CCGuard 清单内的文件和文档时跑 Linux 与 Windows。清单按精确路径和目录前缀列出，共用工具、其他 Skill 脚本与资源、其他工作流、`.gitattributes` 都不在内，混入任何一个就回到三平台，保证 Skill 的 macOS 脚本仍在 macOS 上测试。测试检查仓库中每个 macOS 相关文件都会触发三平台。验证见 CHANGELOG，回滚使用普通 revert。
+

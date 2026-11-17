@@ -336,7 +336,7 @@ docs/                          决策记录与补充文档
 **发布新版本的步骤**（维护者）：
 
 1. 改 `version.py` 的 `__version__`，并在 `assets/monitor/release-notes.json` 最前面加这个版本的更新日志（测试会检查两者一致）。
-2. 写 CHANGELOG，跑完整测试，推送到 main，等三平台 CI 和安装程序构建都通过。
+2. 写 CHANGELOG，跑完整测试，推送到 main，等推送 CI 和安装程序构建都通过。
 3. 用户确认后，发布 GitHub Release，标签 `vX.Y.Z`。`Windows installer` 工作流发现标签与 `version.py` 不一致会直接失败，一致才构建、验证并附上安装程序。
 4. 下载发布的资产核对哈希，把发布记录写进 CHANGELOG。
 
@@ -350,7 +350,7 @@ python -m compileall -q skills/claude-guardian/scripts
 python tools/package_skill.py --output <new.zip>
 ```
 
-- CI 在 Linux、macOS、Windows 与 Python 3.10 Linux 上运行；`tools/ci_scope.py` 区分文档与代码推送。
+- CI 按改动范围选择平台（`tools/ci_scope.py`）：只改文档跑 Linux；只改 CCGuard（面板、打包与其测试）跑 Linux 和 Windows；改到 Skill 其他部分或共用代码跑 Linux、macOS、Windows。另有 Python 3.10 Linux 运行时检查。
 - 最新发布 `v0.6.0`：运行配置自动查找（修复安装版三项显示“未知”）、版本号、检查更新与更新日志；`v0.5.1` 安装向导改为简体中文；`v0.5.0` 起提供 Windows 安装程序（不需要 Python）与出口页来源说明；`v0.4.0` 起包含 WebView 新界面、中文字体、状态历史、处理指引、检测日志与出口评分。完整记录见 [CHANGELOG.md](CHANGELOG.md)，设计取舍见 [docs/decisions.md](docs/decisions.md)。
 
 ## 完整 Claude-Guardian Skill
