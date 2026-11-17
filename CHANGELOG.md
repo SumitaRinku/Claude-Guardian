@@ -5,6 +5,7 @@
 - 安装向导改为简体中文：`packaging/languages/ChineseSimplified.isl` 取自 Inno Setup 官方仓库 jrsoftware/issrc 的 `Files/Languages/Unofficial/ChineseSimplified.isl`（标签 `is-6_7_4`，提交 `c2913c99`，20905 字节，git blob `d6a11c44`），原样保留译者署名；`.gitattributes` 标记 `-text` 保持原始字节。`ccguard.iss` 直接引用仓库内文件，不再依赖构建机是否装有该翻译；`ShowLanguageDialog=auto` 按 Windows 界面语言自动选择，都不匹配时才询问。英文向导保留
 - 测试：`test_windows_build.py` 改为检查安装脚本引用仓库内翻译、文件哈希与上游一致、保留译者署名、不做换行规范化
 - 验证：Windows 11 本机 `python -m unittest discover -s tests` 1804 项通过（442 项 POSIX 专属跳过）；Node 页面测试与 `compileall` 通过；下载的翻译文件大小与 git blob 哈希和上游标签一致。安装程序由 CI 构建并做静默安装、自检、卸载验证，结果见发布记录
+- 发布：`v0.5.1`（提交 `73ec04b`，代码与 `969a91d` 相同）。`CCGuard-Setup-0.5.1.exe` 由 `Windows installer` 工作流在发布时构建并附上，SHA-256 `30cf43faa2cf86459705e2b88df4d3acd51010ee0d5f5d12c08ac7fb4083957e`；`claude-guardian-0.5.1.zip` 与 v0.5.0 字节一致，SHA-256 `7c8f63b93209fb21823d35199e46f1b1d45d6c8ce7149d870f51a50f0c6ad98f`；两份 SHA256SUMS 随附，下载回的资产哈希一致。发布构建在 CI 上通过打包自检、静默安装、安装后自检、静默卸载；推送 CI 在 Linux、macOS、Windows 与 Python 3.10 Linux 通过
 - 风险与回滚：翻译文件标注适用于 Inno Setup 6.5.0 及以上，构建机版本过旧时可能缺少个别消息；回滚使用普通 revert
 
 ## Windows 安装程序与出口页来源说明（2026-11-17，MONITOR-EXE-20261117，ADR-083）
