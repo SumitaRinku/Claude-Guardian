@@ -1086,6 +1086,8 @@ def main(argv=None):
     parser.add_argument('--config', type=Path)
     parser.add_argument('--tray', action='store_true')
     parser.add_argument('--start-hidden', action='store_true')
+    parser.add_argument('--ui', choices=['auto', 'web', 'tk'], default='auto',
+                        help='面板实现：auto 优先 WebView（pywebview），不可用时回退 tkinter')
     parser.add_argument('--no-browser', action='store_true')
     parser.add_argument('--no-launch', action='store_true')
     parser.add_argument('--autostart', action='store_true')
@@ -1106,8 +1108,8 @@ def main(argv=None):
                       '\n登录 Windows 后会自动打开面板并隐藏到托盘。关闭：autostart-disable')
             if args.no_launch:
                 return 0
-            from monitor_gui import run
-            run(cfg, config_path, tray=True)
+            from monitor_webview import launch
+            launch(cfg, config_path, tray=True, ui=args.ui)
             return 0
         if args.action == 'autostart-enable':
             if args.config is None:
@@ -1164,8 +1166,8 @@ def main(argv=None):
         if args.action == 'gui':
             if args.start_hidden and not args.tray:
                 raise MonitorError('隐藏启动需要同时加 --tray，否则窗口无法找回。')
-            from monitor_gui import run
-            run(cfg, args.config, tray=args.tray, start_hidden=args.start_hidden)
+            from monitor_webview import launch
+            launch(cfg, args.config, tray=args.tray, start_hidden=args.start_hidden, ui=args.ui)
             return 0
         if args.output is None:
             raise MonitorError('请用 --output 指定新的入口目录。')

@@ -1,5 +1,15 @@
 # 版本记录
 
+## WebView 面板、中文字体与界面改进（2026-11-17，MONITOR-WEBVIEW-20261117，ADR-080）
+
+- 新增默认 WebView 桌面面板：`scripts/monitor_webview.py` + `assets/monitor/panel.html/css/js`，用 pywebview 调 Edge WebView2 渲染；页面只经 JS 桥接调用 `PanelApi`（状态快照、设置应用／保存、立即采集、开机自启、打开配置、日志复制／清空、关闭选择），不开端口、不发网络请求。托盘、单实例、`--start-hidden` 与原面板一致；标题栏与任务栏图标随总体状态切换
+- 回退：`gui`／`quickstart`／`CCGuard.pyw` 改走 `monitor_webview.launch`；`--ui auto`（默认）在 pywebview 未安装或 WebView2 启动失败时回退 tkinter，`--ui web`／`--ui tk` 强制其一。回退前释放单实例互斥量。pywebview 是可选依赖，`requirements-desktop.txt` 固定 `pywebview==6.2.1`（BSD），核心仍只用标准库
+- 中文字体：正文改为中文优先字体栈 `MiSans` → `HarmonyOS Sans SC` → `Noto Sans SC` → `Source Han Sans SC` → `Microsoft YaHei UI` → `Microsoft YaHei`，取第一个已安装或放进 `fonts/` 的；Anthropic Sans 没有中文字形，不再用于正文（此前中文逐字回退，同一标签混用两种字体）。Anthropic Serif 只用于英文字标，代码用 Anthropic Mono／Cascadia Mono／Consolas；WebView 面板用相同 CSS 字体栈
+- tkinter 面板（回退）改进：问题摘要横幅（按失效 > 降级 > 未知列出异常项）、侧栏异常计数徽标、卡片状态胶囊与一句话说明、问题卡片描边、页眉“立即采集”与“N 秒前”、彩色增量日志与“复制全部／清空”、设置页对齐与提示、开机自启改为滑动开关（原复选框在深色侧栏上勾选标记不可见）、F5 立即采集
+- 测试：新增 `tests/test_monitor_webview.py`（桥接、设置校验与原子保存、日志增量、关闭选择、回退、页面不联网、CSS 字体栈、页面只调用存在的 API）与 `tests/monitor-panel.cjs`；`test_monitor_gui.py` 改写字体用例并补摘要／日志增量回归；单实例测试改用独立互斥量名，不再受本机正在运行的 CCGuard 影响。CI 增加两个 Node 页面逻辑测试
+- 验证：Windows 11 本机 `python -m unittest discover -s tests` 1739 项通过（442 项 POSIX 专属跳过），其中 `tests.test_monitor_webview` 与 `tests.test_monitor_gui` 共 68 项；`node tests/monitor-panel.cjs`、`tests/monitor-interaction.cjs`、`tests/webrtc-lifecycle.cjs` 与 `compileall` 通过；`package_skill.py` 两次打包字节一致并包含新文件。Windows 11 本机用假数据实际打开 WebView 面板与 tkinter 面板并截图核对四个页面与关闭对话框（深色模式）。浅色模式、未装 WebView2 的 Windows 10 与真实托盘联动未逐项验收（not_run）
+- 风险与回滚：WebView 依赖 pywebview 与 WebView2，缺失时回退 tkinter；pywebview 的 Windows 后端依赖 pythonnet。仅影响监测面板、启动入口、打包清单、测试与文档；回滚使用普通 revert
+
 ## 双击启动与单实例（2026-11-16，MONITOR-DOUBLECLICK-20261116，ADR-079）
 
 - 新增根目录 `CCGuard.pyw`（无控制台）与 `CCGuard.cmd`（回退 `pythonw`／`pyw`／`python`／`py`）；首次双击调用 `quickstart`，生成 `%LOCALAPPDATA%\CCGuard\monitor.json` 并打开面板，已有配置不覆盖

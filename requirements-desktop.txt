@@ -1,0 +1,2 @@
+# Optional: WebView desktop panel (BSD-3-Clause). Without it CCGuard falls back to tkinter.
+pywebview==6.2.1

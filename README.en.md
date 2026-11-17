@@ -41,8 +41,8 @@ It splits the state into 10 checks and shows them in green / orange / red / grey
 | **Double-click start** | Extract the release package and double-click `CCGuard.pyw` (or `CCGuard.cmd`); the first run writes a config and opens the panel, and a second double-click does not open another window |
 | **One-command start** | `quickstart` detects the host, client and TUN, writes a config and opens the panel; an existing config is never overwritten |
 | **State-coloured shield** | Green ✓ ok, orange ! degraded, red ✕ fail, grey — unknown; window, tray and page title stay in sync |
-| **New UI** | Dark sidebar + status cards + ttk settings controls; Chinese text falls back to `Microsoft YaHei UI`, and the log no longer uses a CJK-less monospace font |
-| **Window + tray + web** | tkinter panel (default), tray notifications, local `127.0.0.1` web page as a fallback |
+| **New UI** | WebView desktop panel (pywebview + Edge WebView2): problem summary banner, sidebar problem count, coloured log, follows system dark mode; falls back to the improved tkinter panel when pywebview is missing |
+| **Window + tray + web** | WebView panel (default) / tkinter panel (fallback), tray notifications, local `127.0.0.1` web page as an alternative |
 | **System notifications** | Alerts on state transitions with cooldown and recovery notices; can be paused |
 | **Optional autostart** | A per-user Startup shortcut opens the panel hidden in the tray at login; off by default |
 | **Client presets** | FlClash, Clash Verge Rev, Clash Nyanpasu, Clash for Windows, Mihomo / Clash.Meta, sing-box, Hiddify, v2rayN, NekoRay / NekoBox |
@@ -65,6 +65,7 @@ It splits the state into 10 checks and shows them in green / orange / red / grey
 
 - Windows 10 / 11, PowerShell 5.1
 - Python 3.10+ (the official installer normally includes tkinter)
+- Optional: `python -m pip install -r requirements-desktop.txt` installs pywebview for the WebView UI (Windows 10/11 ship Edge WebView2); without it CCGuard falls back to the tkinter panel
 - The proxy client running, with TUN and the firewall already deployed
 
 The monitor uses only the Python standard library; no third-party dependency is needed.
@@ -265,7 +266,8 @@ Runtime config paths differ by client and version; always point to the file the 
 
 - **Native window**: dark sidebar navigation (Status / Log / Settings) + status cards + ttk settings controls; Settings adjusts the interval, cooldown, notification states and pause, and can open the JSON config directly.
 - **Autostart**: a sidebar checkbox opens the panel hidden in the tray at login; off by default and removable at any time.
-- **Fonts**: user-supplied Anthropic fonts under `fonts/` win; otherwise the UI and log fall back to `Microsoft YaHei UI`, headings to `Segoe UI Semibold`, and code to `Cascadia Mono` / `Consolas`. The log no longer uses a CJK-less monospace font.
+- **Fonts**: CJK-first stack: `MiSans` → `HarmonyOS Sans SC` → `Noto Sans SC` / Source Han Sans → `Microsoft YaHei UI` (ships with Windows), first one installed or dropped into `fonts/` wins; the Latin wordmark uses Anthropic Serif (if supplied) or Georgia, check codes Anthropic Mono / `Cascadia Mono` / `Consolas`. Body text no longer uses the CJK-less Anthropic Sans, which made mixed Chinese/Latin labels fall back glyph by glyph.
+- **UI implementation**: `gui --ui auto` (default) prefers WebView and falls back to tkinter; `--ui web` is WebView only (error if unavailable), `--ui tk` is tkinter only.
 - **Closing the window**: with a tray, hide to tray, close, or cancel; without a tray, only close or cancel.
 - **Tray**: the shield changes colour with the overall state and shows the state on hover; transitions raise notifications with cooldown, and recovery is announced.
 - **Web fallback**: `serve` listens on a random `127.0.0.1` port with a random session token, validates `Host`, `Origin` and `Sec-Fetch-Site`, and sends a strict CSP.
@@ -284,7 +286,8 @@ Runtime config paths differ by client and version; always point to the file the 
 | `core_ipv6` / `strict_route` / `dns_hijack` unknown | Check that `runtime_config` points to the live config; set `config_format` if needed |
 | `dns_servers` / `os_ipv6` degraded | A subscription update or client upgrade may have restored DNS override or IPv6; recheck |
 | Autostart does not work | Confirm the program directory and config path have not moved; toggle it again or run `autostart-enable`; check `CCGuard.lnk` in the current user's Startup folder |
-| Fonts still look poor | Put Anthropic fonts in `fonts/` (loaded per process, not installed) or make sure `Microsoft YaHei UI` is present |
+| Fonts still look poor | Install MiSans or HarmonyOS Sans SC (or drop the font files into `fonts/`, loaded per process, not installed); the last fallback is `Microsoft YaHei UI` |
+| The panel still looks old | pywebview or WebView2 is missing, so it fell back to tkinter; run `python -m pip install -r requirements-desktop.txt`. The log page says which panel is running |
 | No notifications | Check Windows notification settings and Focus Assist; the panel is the source of truth |
 | "monitor stopped updating" | The monitor process exited or the interval is too long; restart the panel |
 | The window will not open | tkinter is missing; use the `serve` web page |
@@ -297,7 +300,8 @@ CCGuard.cmd                    double-click fallback (pythonw / pyw / python / p
 skills/claude-guardian/
   SKILL.md                     Claude-Guardian Skill entry
   scripts/monitor.py           CCGuard monitor entry
-  scripts/monitor_gui.py       tkinter panel
+  scripts/monitor_webview.py   WebView panel (pywebview bridge, default)
+  scripts/monitor_gui.py       tkinter panel (fallback)
   assets/monitor/              panel, tray, icons and config template
   references/monitor.md        monitor config, checks and boundaries
 tests/                         unit, regression and synthetic interaction tests

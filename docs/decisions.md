@@ -680,3 +680,11 @@ v1 只覆盖 Windows，其他平台记 `unknown` 而不冒充支持；`desktop` 
 `monitor_gui.run` 使用 Windows 命名互斥量（`Local\CCGuard.Monitor.Instance`）保证单实例：重复双击不会开第二个窗口或托盘，而是提示从托盘打开。启动器本身不新增网络、提权或常驻行为，仍受原有只读边界约束。
 
 已知限制：双击依赖 Python 3.10+ 与 `.pyw` 关联；`.cmd` 回退可能短暂显示控制台；单实例按当前 Windows 会话；真实资源管理器双击和不同 Python 安装方式未逐项真机验收。验证见 CHANGELOG，回滚使用普通 revert。
+
+## ADR-080：WebView 面板与中文优先字体（2026-11-17，MONITOR-WEBVIEW-20261117）
+
+tkinter 面板的外观和刷新性能达不到要求（Canvas 手绘卡片、逐字字体回退、整段日志重绘），经用户确认改用 pywebview + Edge WebView2 作为默认面板，比较过 PySide6 + Fluent Widgets（依赖约 200MB、需全部重写）和 CustomTkinter（底层仍是 tkinter）。pywebview 是可选依赖：未安装或 WebView2 启动失败时，`--ui auto` 回退到改进后的 tkinter 面板，核心监测仍只用标准库。
+
+页面与 Python 只经 JS 桥接通信，`PanelApi` 只暴露页面需要的方法，内部状态全部私有，页面不开端口、不发网络请求，只读、不改系统的边界不变。设置校验与原子保存、托盘、单实例、隐藏启动沿用原实现。
+
+字体：面板几乎全是中文，正文必须用有完整中文字形的字体，否则 Tk／浏览器会逐字回退，同一行混用两种字体。顺序为 MiSans、HarmonyOS Sans SC（屏幕优先的 UI 字体，可免费使用，不随包分发）、Noto Sans SC／思源黑体（OFL）、Microsoft YaHei UI（Windows 自带，兜底）。Anthropic Serif／Mono 只用于英文字标和检查码。验证见 CHANGELOG，回滚使用普通 revert。

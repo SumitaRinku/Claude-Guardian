@@ -39,8 +39,8 @@ CCGuard 是本仓库在 [Claude-Guardian](https://github.com/DUNHKpcc/Claude-Gua
 | **双击启动** | Release 包解压后双击 `CCGuard.pyw`（或 `CCGuard.cmd`），首次自动生成配置并打开面板；再次双击不会开第二个窗口 |
 | **一条命令启动** | `quickstart` 自动识别主机、客户端和 TUN，生成配置并打开面板；已有配置不覆盖 |
 | **状态色盾牌** | 绿 ✓ 正常、橙 ! 降级、红 ✕ 失效、灰 — 未知；窗口、托盘与网页标题同步 |
-| **新界面** | 左侧栏导航 + 状态卡片 + ttk 设置控件；中文字体回退到 `Microsoft YaHei UI`，日志不再用无中文字形的等宽字体 |
-| **窗口 + 托盘 + 网页** | tkinter 面板（默认）、托盘通知、`127.0.0.1` 本地网页备选 |
+| **新界面** | WebView（pywebview + Edge WebView2）桌面面板：问题摘要横幅、侧栏异常计数、彩色日志、跟随系统深色模式；没装 pywebview 时自动回退改进版 tkinter 面板 |
+| **窗口 + 托盘 + 网页** | WebView 面板（默认）／tkinter 面板（回退）、托盘通知、`127.0.0.1` 本地网页备选 |
 | **系统通知** | 状态跃迁时提醒，带冷却与恢复提示；可暂停 |
 | **可选开机自启** | 当前用户 Startup 快捷方式，登录后隐藏到托盘；默认关闭，可随时撤销 |
 | **多客户端预设** | FlClash、Clash Verge Rev、Clash Nyanpasu、Clash for Windows、Mihomo / Clash.Meta、sing-box、Hiddify、v2rayN、NekoRay / NekoBox |
@@ -63,6 +63,7 @@ CCGuard 是本仓库在 [Claude-Guardian](https://github.com/DUNHKpcc/Claude-Gua
 
 - Windows 10 / 11，PowerShell 5.1
 - Python 3.10+（官方安装包通常自带 tkinter）
+- 可选：`python -m pip install -r requirements-desktop.txt` 安装 pywebview，获得 WebView 新界面（Windows 10/11 自带 Edge WebView2）；不装也能用，自动回退 tkinter 面板
 - 代理客户端已经在运行，TUN 和防火墙已按你的方案部署
 
 监测面板只用 Python 标准库，不需要安装第三方依赖。
@@ -263,7 +264,8 @@ python ...\monitor.py register-notifier --config <private>\monitor.json
 
 - **独立窗口**：左侧栏导航（状态 / 日志 / 设置）+ 状态卡片 + ttk 设置控件；设置页可调采集间隔、通知冷却、通知项和暂停提醒，并可「打开配置」直接编辑 JSON。
 - **开机自启**：左侧栏「开机自启」复选框，登录后自动打开面板并隐藏到托盘；默认关闭，可随时取消。
-- **字体**：优先使用 `fonts/` 里你自备的 Anthropic 字体；缺失时界面和日志回退到 `Microsoft YaHei UI`，标题用 `Segoe UI Semibold`，代码用 `Cascadia Mono`／`Consolas`。日志不再用无中文字形的等宽字体。
+- **字体**：中文优先字体栈：`MiSans` → `HarmonyOS Sans SC` → `Noto Sans SC`／思源黑体 → `Microsoft YaHei UI`（Windows 自带），取第一个已安装或放进 `fonts/` 的；英文字标用 Anthropic Serif（自备时）或 Georgia，检查码用 Anthropic Mono／`Cascadia Mono`／`Consolas`。正文不再用没有中文字形的 Anthropic Sans，避免中英文混排时逐字回退成两种字体。
+- **界面实现**：`gui --ui auto`（默认）优先 WebView，失败回退 tkinter；`--ui web` 只用 WebView（不可用时报错），`--ui tk` 只用 tkinter。
 - **关闭窗口**：有托盘时可隐藏到托盘、直接关闭或取消；没有托盘时只提供关闭或取消。
 - **托盘**：盾牌图标随整体状态换色，悬停显示状态；状态跃迁时按冷却发系统通知，恢复也提示。
 - **网页备选**：`serve` 只监听 `127.0.0.1` 的随机端口，路径带随机会话令牌，并校验 `Host`、`Origin`、`Sec-Fetch-Site`，带严格 CSP。
@@ -282,7 +284,8 @@ python ...\monitor.py register-notifier --config <private>\monitor.json
 | `core_ipv6` / `strict_route` / `dns_hijack` 未知 | 核对 `runtime_config` 是否指向实际运行配置；必要时指定 `config_format` |
 | `dns_servers` / `os_ipv6` 降级 | 订阅更新或客户端升级可能改回 DNS 覆写或 IPv6；恢复后重新核对 |
 | 开机自启没生效 | 确认程序目录和配置路径没有移动；重新勾选或用 `autostart-enable`；检查当前用户 Startup 目录里的 `CCGuard.lnk` |
-| 字体仍不好看 | 把 Anthropic 字体放进 `fonts/`（进程内加载，不安装到系统）；或确认系统有 `Microsoft YaHei UI` |
+| 字体仍不好看 | 安装 MiSans 或 HarmonyOS Sans SC（也可把字体文件放进 `fonts/`，进程内加载，不安装到系统）；最低回退为 `Microsoft YaHei UI` |
+| 面板还是旧样式 | 没装 pywebview 或缺 WebView2，已回退 tkinter；执行 `python -m pip install -r requirements-desktop.txt`，日志页会写明当前用哪个面板 |
 | 收不到通知 | 检查 Windows 通知设置与专注助手；面板显示才是准的 |
 | 提示「监测已停止更新」 | 监测进程已退出或采集间隔过长；重新启动面板 |
 | 窗口打不开 | 缺少 tkinter；改用 `serve` 网页版 |
@@ -295,7 +298,8 @@ CCGuard.cmd                    双击回退（找 pythonw / pyw / python / py）
 skills/claude-guardian/
   SKILL.md                     Claude-Guardian Skill 入口
   scripts/monitor.py           CCGuard 监测入口
-  scripts/monitor_gui.py       tkinter 面板
+  scripts/monitor_webview.py   WebView 面板（pywebview 桥接，默认）
+  scripts/monitor_gui.py       tkinter 面板（回退）
   assets/monitor/              面板、托盘、图标与配置模板
   references/monitor.md        监测配置、检查项与边界
 tests/                         单元、回归与合成交互测试

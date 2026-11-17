@@ -125,6 +125,69 @@ class Events(unittest.TestCase):
         self.assertIn('失效', gui.event_text({'id': 'tun_adapter', 'from': 'ok', 'to': 'fail'}))
 
 
+class Summary(unittest.TestCase):
+    ROWS = [{'id': 'proxy_core', 'label': '代理核心', 'state': 'ok', 'code': 'A'},
+            {'id': 'dns_servers', 'label': '网卡 DNS', 'state': 'unknown', 'code': 'B'},
+            {'id': 'core_ipv6', 'label': '核心 IPv6', 'state': 'degraded', 'code': 'C'},
+            {'id': 'firewall_block', 'label': '防火墙默认阻止', 'state': 'fail', 'code': 'D'}]
+
+    def test_problems_are_worst_first(self):
+        self.assertEqual([row['state'] for row in gui.problems(self.ROWS)],
+                         ['fail', 'degraded', 'unknown'])
+
+    def test_summary_names_every_problem(self):
+        headline, detail = gui.summary_text(self.ROWS)
+        self.assertEqual(headline, '3 项需要关注')
+        self.assertTrue(detail.startswith('防火墙默认阻止 失效'))
+        self.assertIn('网卡 DNS 未知', detail)
+
+    def test_summary_all_ok_and_empty(self):
+        self.assertIn('全部正常', gui.summary_text(self.ROWS[:1])[0])
+        self.assertIn('正在读取', gui.summary_text([])[0])
+
+    def test_tally_counts_states(self):
+        self.assertEqual(gui.tally(self.ROWS), {'ok': 1, 'degraded': 1, 'fail': 1, 'unknown': 1})
+
+    def test_every_check_has_a_description(self):
+        self.assertEqual(set(gui.DESCRIPTIONS), set(engine.CHECK_IDS))
+
+    def test_ago_text(self):
+        self.assertEqual(gui.ago_text(2), '刚刚')
+        self.assertEqual(gui.ago_text(42), '42 秒前')
+        self.assertEqual(gui.ago_text(180), '3 分钟前')
+        self.assertEqual(gui.ago_text(7300), '2 小时前')
+        self.assertEqual(gui.ago_text(-5), '刚刚')
+
+
+class LogDelta(unittest.TestCase):
+    def test_appends_only_new_rows(self):
+        log = gui.LogBuffer(limit=10)
+        log.add('a', '1')
+        log.add('a', '2', 'fail')
+        self.assertEqual(gui.log_delta(0, log), (False, log.snapshot()))
+        log.add('a', '3')
+        rebuild, rows = gui.log_delta(2, log)
+        self.assertFalse(rebuild)
+        self.assertEqual([row[2] for row in rows], ['3'])
+        self.assertEqual(gui.log_delta(3, log), (False, []))
+
+    def test_rebuilds_when_buffer_dropped_unseen_rows(self):
+        log = gui.LogBuffer(limit=2)
+        for index in range(5):
+            log.add('a', str(index))
+        rebuild, rows = gui.log_delta(1, log)
+        self.assertTrue(rebuild)
+        self.assertEqual([row[2] for row in rows], ['3', '4'])
+
+    def test_level_is_kept_and_clear_empties(self):
+        log = gui.LogBuffer()
+        log.add('状态', 'x', 'fail')
+        self.assertEqual(log.snapshot()[0][3], 'fail')
+        log.clear()
+        self.assertEqual(log.snapshot(), [])
+        self.assertEqual(log.total, 1)
+
+
 class Buffer(unittest.TestCase):
     def test_buffer_is_bounded_and_ordered(self):
         log = gui.LogBuffer(limit=3)
@@ -167,20 +230,34 @@ class Fonts(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def test_fallbacks_without_user_fonts(self):
+    def test_defaults_without_user_or_installed_fonts(self):
         families = gui.font_families([])
-        self.assertEqual(families, {'ui': 'Microsoft YaHei UI', 'serif': 'Segoe UI Semibold',
-                                    'mono': 'Cascadia Mono', 'log': 'Microsoft YaHei UI'})
+        self.assertEqual(families, {'ui': 'Microsoft YaHei UI', 'serif': 'Georgia',
+                                    'mono': 'Consolas', 'log': 'Microsoft YaHei UI'})
 
-    def test_installed_fonts_are_preferred_over_missing_fallbacks(self):
-        families = gui.font_families([], {'Microsoft YaHei UI', 'Segoe UI', 'Consolas'})
-        self.assertEqual(families['ui'], 'Microsoft YaHei UI')
-        self.assertEqual(families['serif'], 'Microsoft YaHei UI')
-        self.assertEqual(families['mono'], 'Consolas')
+    def test_installed_fonts_pick_first_preference(self):
+        families = gui.font_families([], {'Microsoft YaHei UI', 'Noto Sans SC', 'MiSans',
+                                          'Segoe UI', 'Georgia', 'Consolas', 'Cascadia Mono'})
+        self.assertEqual(families['ui'], 'MiSans')
+        self.assertEqual(families['serif'], 'Georgia')
+        self.assertEqual(families['mono'], 'Cascadia Mono')
         self.assertEqual(families['log'], families['ui'])
+        self.assertEqual(gui.font_families([], {'Microsoft YaHei UI', 'Noto Sans SC'})['ui'],
+                         'Noto Sans SC')
 
-    def test_log_font_is_cjk_capable_ui_font(self):
-        self.assertEqual(gui.font_families([])['log'], gui.font_families([])['ui'])
+    def test_ui_font_is_always_cjk_capable(self):
+        # Regression: a Latin-only body font (Anthropic Sans) made Tk fall back glyph by glyph,
+        # so every Chinese label mixed two typefaces.
+        files = [fake_font(self.dir / 'a.ttf', 'Anthropic Sans Text'),
+                 fake_font(self.dir / 'b.ttf', 'Anthropic Sans Web Text')]
+        families = gui.font_families(files, {'Microsoft YaHei UI', 'Segoe UI'})
+        self.assertEqual(families['ui'], 'Microsoft YaHei UI')
+        self.assertNotIn('Anthropic Sans', ' '.join(gui.FONT_PREFERENCES['ui']))
+        self.assertNotIn('Consolas', gui.FONT_PREFERENCES['ui'])
+
+    def test_supplied_cjk_font_wins_without_install(self):
+        files = [fake_font(self.dir / 'm.ttf', 'MiSans')]
+        self.assertEqual(gui.font_families(files, {'Microsoft YaHei UI'})['ui'], 'MiSans')
 
     def test_family_is_read_from_the_font_not_the_file_name(self):
         path = fake_font(self.dir / 'whatever.otf', 'Anthropic Sans Text')
@@ -189,16 +266,13 @@ class Fonts(unittest.TestCase):
         (self.dir / 'broken.ttf').write_bytes(b'not a font')
         self.assertIsNone(gui.font_family(self.dir / 'broken.ttf'))
 
-    def test_static_sans_text_is_preferred_over_web_text(self):
-        files = [fake_font(self.dir / 'a.ttf', 'Anthropic Sans Web Text'),
-                 fake_font(self.dir / 'b.otf', 'Anthropic Sans Text'),
-                 fake_font(self.dir / 'c.ttf', 'Anthropic Serif Web Text'),
+    def test_supplied_anthropic_fonts_serve_wordmark_and_codes(self):
+        files = [fake_font(self.dir / 'c.ttf', 'Anthropic Serif Web Text'),
                  fake_font(self.dir / 'd.ttf', 'Anthropic Mono Variable')]
-        self.assertEqual(gui.font_families(files), {'ui': 'Anthropic Sans Text',
-                                                    'serif': 'Anthropic Serif Web Text',
-                                                    'mono': 'Anthropic Mono Variable',
-                                                    'log': 'Anthropic Sans Text'})
-        self.assertEqual(gui.font_families(files[:1])['ui'], 'Anthropic Sans Web Text')
+        families = gui.font_families(files, {'Microsoft YaHei UI'})
+        self.assertEqual(families['serif'], 'Anthropic Serif Web Text')
+        self.assertEqual(families['mono'], 'Anthropic Mono Variable')
+        self.assertEqual(families['ui'], 'Microsoft YaHei UI')
 
     def test_discovery_includes_subfolders_and_both_formats(self):
         sub = self.dir / 'Anthropic Sans'
@@ -212,7 +286,8 @@ class Fonts(unittest.TestCase):
     @unittest.skipUnless((REPO_FONTS / 'Anthropic Sans').is_dir(), 'user-supplied fonts are not in the repository')
     def test_user_supplied_fonts_resolve_when_present(self):
         families = gui.font_families(gui.font_files())
-        self.assertEqual(families['ui'], 'Anthropic Sans Text')
+        self.assertTrue(families['serif'].startswith('Anthropic Serif'))
+        self.assertIn(families['ui'], gui.FONT_PREFERENCES['ui'])
 
     def test_rounded_points_returns_closed_outline(self):
         points = gui.rounded_points(0, 0, 100, 40, 10)
@@ -254,9 +329,11 @@ class UiWiring(unittest.TestCase):
     @unittest.skipUnless(engine.platform.system() == 'Windows', 'Windows named mutex')
     def test_a_second_instance_is_refused(self):
         import ctypes
+        # Own name: a real CCGuard running on the test machine must not decide the result.
+        name = 'Local\\CCGuard.Monitor.Test.%d' % engine.os.getpid()
         gui._INSTANCE_MUTEX = None
-        self.assertTrue(gui.acquire_single_instance())
-        self.assertFalse(gui.acquire_single_instance())
+        self.assertTrue(gui.acquire_single_instance(name))
+        self.assertFalse(gui.acquire_single_instance(name))
         handle = gui._INSTANCE_MUTEX
         gui._INSTANCE_MUTEX = None
         if handle:

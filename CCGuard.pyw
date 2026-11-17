@@ -36,8 +36,8 @@ def main():
     try:
         import monitor
         cfg, config_path, _created = monitor.quickstart_config()
-        from monitor_gui import run
-        run(cfg, config_path, tray=True)
+        from monitor_webview import launch
+        launch(cfg, config_path, tray=True)
         return 0
     except Exception as error:
         notify('CCGuard 启动失败：' + str(error), True)

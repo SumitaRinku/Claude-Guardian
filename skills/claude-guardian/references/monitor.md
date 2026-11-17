@@ -16,10 +16,10 @@
 | --- | --- |
 | 系统 | Windows 10/11，PowerShell 5.1 |
 | 代理客户端 | FlClash、Clash Verge Rev、Clash Nyanpasu、Clash for Windows、Mihomo / Clash.Meta、sing-box、Hiddify、v2rayN、NekoRay / NekoBox；也可自定义进程名与 TUN 名称片段 |
-| Python | 3.10+，只用标准库 |
+| Python | 3.10+；核心只用标准库。WebView 面板可选依赖 pywebview（`requirements-desktop.txt`，BSD 许可），未安装时自动回退 tkinter |
 | 依赖服务 | 无；不安装服务、不建计划任务；默认不写开机自启，可选开启一个当前用户 Startup 快捷方式 |
-| 界面 | 独立 tkinter 窗口（默认，侧栏 + 卡片 + ttk 控件）或本地网页（备选）；两者都不需要浏览器即可收到通知 |
-| 字体 | 读取仓库 `fonts/` 及其子文件夹里用户自备的 .ttf/.otf（进程内私有注册，不安装到系统），按字体文件内的真实字体名选用：正文优先 Anthropic Sans Text（静态字重），其次 Anthropic Sans Web Text；标题 Anthropic Serif；代码 Anthropic Mono。文件缺失时按已安装字体回退：界面与日志用 `Microsoft YaHei UI`／`Segoe UI`，标题用 `Segoe UI Semibold`，代码用 `Cascadia Mono`／`Consolas`；日志不再用无中文字形的等宽字体。`fonts/` 已列入 `.gitignore`，字体不随仓库或安装包分发 |
+| 界面 | `gui --ui auto`（默认）优先 WebView 桌面面板（pywebview + Edge WebView2，页面 `assets/monitor/panel.*`，经 JS 桥接调用 Python，不开端口、不发网络请求），不可用时回退 tkinter 面板；`--ui web`／`--ui tk` 强制其一。另有本地网页（`serve`）备选；托盘通知与面板实现无关 |
+| 字体 | 正文与日志用中文优先字体：`MiSans` → `HarmonyOS Sans SC` → `Noto Sans SC` → `Source Han Sans SC` → `Microsoft YaHei UI` → `Microsoft YaHei`，取第一个已安装或放进 `fonts/` 的（进程内私有注册，不安装到系统）；没有中文字形的 Anthropic Sans 不再用于正文，避免中英文混排逐字回退。英文字标用 Anthropic Serif（自备时）或 Georgia；检查码用 Anthropic Mono／`Cascadia Mono`／`Consolas`。WebView 面板用同一 CSS 字体栈，自备的 Anthropic Serif／Mono 经桥接以 FontFace 加载。`fonts/` 已列入 `.gitignore`，字体不随仓库或安装包分发 |
 | 采集方式 | 单次 PowerShell 查询，返回进程、网卡、路由、防火墙、DNS 与 IPv6 绑定 |
 | 采集间隔 | 默认 5 秒，配置项 `alerts.interval_seconds` |
 

@@ -37,11 +37,12 @@
 | 脚本 | 类型 | 用途 | 说明 |
 | --- | --- | --- | --- |
 | `monitor.py` | 入口 | 只读本机监测：`quickstart` 一键生成配置、`detect` 候选识别、`check` 单次 JSON、`gui` 独立窗口、`serve` 本地网页、`desktop` 生成入口、`autostart-*` 可选开机自启；支持 FlClash／Clash Verge Rev／Mihomo／sing-box／Hiddify／v2rayN／NekoRay 等预设与 Clash／sing-box／Xray 配置；不联网、不改系统 | [monitor.md](monitor.md) |
-| `monitor_gui.py` | 入口／库 | tkinter 面板：侧栏导航、状态卡片、日志、ttk 设置控件、开机自启开关、打开配置；纯逻辑可离线测试 | 同上 |
+| `monitor_webview.py` | 入口／库 | 默认 WebView 面板（pywebview + Edge WebView2）：JS 桥接 `PanelApi`、托盘与单实例、不可用时回退 tkinter；纯逻辑可离线测试 | 同上 |
+| `monitor_gui.py` | 入口／库 | tkinter 回退面板与共享逻辑：中文优先字体、摘要横幅、状态卡片、彩色日志、设置、开机自启开关；纯逻辑可离线测试 | 同上 |
 
 双击入口：发布包与仓库根目录的 `CCGuard.pyw`（无控制台）和 `CCGuard.cmd`（回退启动器），首次双击调用 `quickstart`。
 
-随包资源：`assets/monitor/monitor.html`、`assets/monitor/monitor.css`、`assets/monitor/monitor.js`、`assets/monitor/tray.ps1`、`assets/monitor/notifier-shortcut.ps1`（可选通知署名的开始菜单快捷方式）、`assets/monitor/config.example.json`、`assets/monitor/icon.png`、`assets/monitor/icon-ok.ico`、`assets/monitor/icon-degraded.ico`、`assets/monitor/icon-fail.ico`、`assets/monitor/icon-unknown.ico`、`assets/monitor/logo-ok.png`、`assets/monitor/logo-degraded.png`、`assets/monitor/logo-fail.png`、`assets/monitor/logo-unknown.png`（面板页眉盾牌）。
+随包资源：`assets/monitor/monitor.html`、`assets/monitor/monitor.css`、`assets/monitor/monitor.js`、`assets/monitor/panel.html`、`assets/monitor/panel.css`、`assets/monitor/panel.js`（WebView 桌面面板）、`assets/monitor/tray.ps1`、`assets/monitor/notifier-shortcut.ps1`（可选通知署名的开始菜单快捷方式）、`assets/monitor/config.example.json`、`assets/monitor/icon.png`、`assets/monitor/icon-ok.ico`、`assets/monitor/icon-degraded.ico`、`assets/monitor/icon-fail.ico`、`assets/monitor/icon-unknown.ico`、`assets/monitor/logo-ok.png`、`assets/monitor/logo-degraded.png`、`assets/monitor/logo-fail.png`、`assets/monitor/logo-unknown.png`（面板页眉盾牌）。
 
 ## 网络检测的其他部分
 

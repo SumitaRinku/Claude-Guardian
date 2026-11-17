@@ -36,6 +36,10 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Synthetic WebRTC lifecycle regression (no network)
         run: node tests/webrtc-lifecycle.cjs
+      - name: Synthetic monitor page logic (no browser)
+        run: |
+          node tests/monitor-interaction.cjs
+          node tests/monitor-panel.cjs
       - name: Compile runtime
         run: python -m compileall -q skills/claude-guardian/scripts
       - name: Build and verify reproducible package

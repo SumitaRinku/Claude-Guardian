@@ -1,0 +1,346 @@
+"""WebView desktop panel for the read-only monitor (pywebview + Edge WebView2).
+
+The page talks to Python only through the pywebview JS bridge (no HTTP server, no port).
+When pywebview or WebView2 is unavailable the caller falls back to the tkinter panel.
+"""
+import base64
+import os
+from pathlib import Path
+import platform
+import shutil
+import tempfile
+import threading
+import time
+
+import monitor as engine
+import monitor_gui as shared
+
+PAGE = engine.ICON_DIR / 'panel.html'
+# Supplied Latin fonts the page may load (wordmark and check codes). Body text stays on the
+# CSS CJK stack, so a Latin-only face never ends up under Chinese labels.
+PAGE_FONT_PREFIXES = ('Anthropic Serif', 'Anthropic Mono')
+PAGE_FONT_LIMIT = 4 * 1024 * 1024
+INSTALL_HINT = 'python -m pip install pywebview'
+
+
+def set_native_icon(window, state_name):
+    """Title-bar/taskbar icon from the state .ico (WinForms would show python.exe's icon)."""
+    if platform.system() != 'Windows':
+        return False
+    try:
+        import ctypes
+        hwnd = int(window.native.Handle.ToInt64())
+        path = str(engine.ICON_DIR / ('icon-' + state_name + '.ico'))
+        user32 = ctypes.windll.user32
+        user32.LoadImageW.restype = ctypes.c_void_p
+        user32.SendMessageW.argtypes = (ctypes.c_void_p, ctypes.c_uint, ctypes.c_void_p, ctypes.c_void_p)
+        for kind, size in ((0, 16), (1, 32)):  # ICON_SMALL, ICON_BIG
+            handle = user32.LoadImageW(None, path, 1, size, size, 0x10)
+            if handle:
+                user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0080, ctypes.c_void_p(kind), ctypes.c_void_p(handle))
+        return True
+    except Exception:
+        return False
+
+
+class Unavailable(Exception):
+    """pywebview or the Edge WebView2 runtime cannot show the panel."""
+
+
+def page_fonts(files):
+    """[{family, data}] for supplied wordmark/code fonts, base64 for the page's FontFace API."""
+    fonts, seen = [], set()
+    for path in files:
+        family = shared.font_family(path)
+        if not family or family in seen or not family.startswith(PAGE_FONT_PREFIXES):
+            continue
+        try:
+            data = Path(path).read_bytes()
+        except OSError:
+            continue
+        if len(data) > PAGE_FONT_LIMIT:
+            continue
+        seen.add(family)
+        fonts.append({'family': family, 'data': base64.b64encode(data).decode('ascii')})
+    return fonts
+
+
+def row_view(row):
+    return dict(row, state_text=shared.STATE_TEXT.get(row['state'], row['state']),
+                description=shared.DESCRIPTIONS.get(row['id'], ''))
+
+
+class PanelApi:
+    """Methods the page calls. Everything else is private so pywebview does not expose it."""
+
+    def __init__(self, cfg, config_path, store, tray_alive=lambda: False, autostart=None,
+                 open_file=None, clock=time.time):
+        self._cfg = cfg
+        self._config_path = Path(config_path)
+        self._store = store
+        self._tray_alive = tray_alive
+        self._autostart = autostart or {
+            'status': engine.autostart_status,
+            'enable': lambda: engine.enable_autostart(self._config_path),
+            'disable': engine.disable_autostart,
+        }
+        self._open_file = open_file or getattr(os, 'startfile', None)
+        self._clock = clock
+        self._log = shared.LogBuffer()
+        self._states = {}
+        self._lock = threading.Lock()
+        self._window = None
+        self._on_close = None
+        self._notice = None
+
+    # ---- called from Python ----
+    def _bind(self, window, on_close):
+        self._window, self._on_close = window, on_close
+
+    def _observe(self):
+        """Turn state changes into log rows; returns the events for the caller to surface."""
+        current = engine.states_of(self._store.read())
+        with self._lock:
+            events = engine.transitions(self._states, current)
+            for event in events:
+                self._log.add('状态', shared.event_text(event), event['to'])
+            self._states = current
+        return events
+
+    def _note(self, kind, text, level='info'):
+        with self._lock:
+            self._log.add(kind, text, level)
+
+    # ---- called from the page ----
+    def snapshot(self, since=0):
+        self._observe()
+        state = self._store.read()
+        rows = [row_view(row) for row in shared.build_rows(state)]
+        headline, detail = shared.summary_text(rows)
+        flagged = shared.problems(rows)
+        stamp = state.get('checked_at') or 0
+        with self._lock:
+            total = self._log.total
+            rows_log = self._log.snapshot()
+        fresh = total - int(since or 0)
+        rebuild = fresh > len(rows_log) or fresh < 0
+        tail = rows_log if rebuild else (rows_log[len(rows_log) - fresh:] if fresh > 0 else [])
+        alerts = self._cfg['alerts']
+        notice, self._notice = self._notice, None
+        return {
+            'overall': state.get('overall', 'unknown') if stamp else 'unknown',
+            'overall_text': shared.OVERALL_TEXT.get(state.get('overall'), '状态未知') if stamp else '正在读取…',
+            'checked_at': stamp,
+            'ago': shared.ago_text(self._clock() - stamp) if stamp else '',
+            'target': state.get('target_ref') or self._cfg.get('target') or '—',
+            'rows': rows,
+            'headline': headline,
+            'detail': detail,
+            'problems': len(flagged),
+            'worst': flagged[0]['state'] if flagged else 'ok',
+            'counts': shared.tally(rows),
+            'log': {'total': total, 'rebuild': rebuild,
+                    'rows': [{'time': t, 'kind': k, 'text': x, 'level': lv} for t, k, x, lv in tail]},
+            'paused': bool(alerts.get('paused')),
+            'notice': notice,
+        }
+
+    def settings(self):
+        alerts = self._cfg['alerts']
+        return {'interval': alerts['interval_seconds'], 'cooldown': alerts['cooldown_seconds'],
+                'notify': {name: name in alerts['notify_states'] for name in ('fail', 'degraded', 'unknown')},
+                'paused': bool(alerts.get('paused')), 'config_path': str(self._config_path),
+                'tray': bool(self._tray_alive())}
+
+    def apply(self, form, save=False):
+        form = form or {}
+        try:
+            shared.apply_settings(self._cfg, form.get('interval'), form.get('cooldown'),
+                                  dict(form.get('notify') or {}), bool(form.get('paused')))
+        except engine.MonitorError as error:
+            return {'ok': False, 'message': '设置未生效：' + str(error)}
+        alerts = self._cfg['alerts']
+        self._note('设置', '间隔 %ss，冷却 %ss%s' % (alerts['interval_seconds'], alerts['cooldown_seconds'],
+                                                 '，提醒已暂停' if alerts['paused'] else ''))
+        if save:
+            try:
+                shared.save_config(self._config_path, self._cfg)
+            except (OSError, engine.MonitorError) as error:
+                return {'ok': False, 'message': '保存失败，原配置未改动：' + str(error)}
+        self._store.refresh_async()
+        return {'ok': True, 'message': '已写入配置文件' if save else '设置已生效（本次运行）'}
+
+    def refresh(self):
+        started = self._store.refresh_async()
+        return {'ok': started, 'message': '已触发一次采集' if started else '上一次采集尚未完成'}
+
+    def autostart_status(self):
+        try:
+            return {'enabled': bool(self._autostart['status']().get('enabled'))}
+        except Exception:
+            return {'enabled': False}
+
+    def set_autostart(self, enabled):
+        try:
+            self._autostart['enable' if enabled else 'disable']()
+        except engine.MonitorError as error:
+            return {'ok': False, 'enabled': not enabled, 'message': '开机自启未变更：' + str(error)}
+        self._note('启动', '已开启开机自启' if enabled else '已关闭开机自启')
+        return {'ok': True, 'enabled': bool(enabled),
+                'message': '已开启开机自启：登录后自动打开面板到托盘' if enabled else '已关闭开机自启'}
+
+    def open_config(self):
+        try:
+            if self._open_file is None:
+                raise OSError
+            self._open_file(str(self._config_path))
+        except OSError:
+            return {'ok': False, 'message': '无法打开配置文件：' + str(self._config_path)}
+        return {'ok': True, 'message': '已打开配置文件'}
+
+    def clear_log(self):
+        with self._lock:
+            self._log.clear()
+            return {'ok': True, 'total': self._log.total, 'message': '日志已清空'}
+
+    def log_text(self):
+        with self._lock:
+            return '\n'.join('%s  [%s]  %s' % row[:3] for row in self._log.snapshot())
+
+    def fonts(self):
+        return page_fonts(shared.font_files())
+
+    def close_choices(self):
+        return list(shared.close_choices(self._tray_alive()))
+
+    def close(self, choice):
+        if choice not in self.close_choices() or choice is None:
+            return {'ok': False}
+        if choice == 'hide':
+            self._note('面板', '已隐藏到托盘，监测继续')
+        if self._on_close is not None:
+            self._on_close(choice)
+        return {'ok': True}
+
+
+def webview_module():
+    try:
+        import webview
+    except ImportError:
+        raise Unavailable('未安装 pywebview（' + INSTALL_HINT + '）') from None
+    return webview
+
+
+def run(cfg, config_path, tray=False, start_hidden=False, webview=None):
+    """Show the WebView panel; raises Unavailable before any window exists if it cannot."""
+    webview = webview or webview_module()
+    if not PAGE.is_file():
+        raise Unavailable('缺少面板页面 ' + str(PAGE))
+    if not shared.acquire_single_instance():
+        shared.already_running()
+        return
+    shared.set_app_id()
+
+    state_dir = Path(tempfile.mkdtemp(prefix='guardian-monitor-web-'))
+    state_path = state_dir / 'state.json'
+    show_path = state_dir / 'show.request'
+    store = engine.Store(cfg, state_path)
+    box = {'child': engine.spawn_tray(state_path, '', cfg, show_file=show_path)
+           if tray and platform.system() == 'Windows' else None}
+
+    def tray_alive():
+        return box['child'] is not None and box['child'].poll() is None
+
+    api = PanelApi(cfg, config_path, store, tray_alive=tray_alive)
+    hidden = bool(start_hidden and tray_alive())
+    window = webview.create_window(
+        engine.APP_NAME, url=PAGE.as_uri(), js_api=api, width=1040, height=760,
+        min_size=(860, 600), background_color='#f7f4ef', hidden=hidden, text_select=True)
+    flags = {'exit': False, 'visible': not hidden, 'shown': False}
+
+    def on_shown():
+        flags['shown'] = True
+        flags['icon'] = None
+
+    window.events.shown += on_shown
+
+    def stop_everything():
+        store.stop.set()
+        if box['child'] is not None:
+            box['child'].terminate()
+            box['child'] = None
+        shutil.rmtree(state_dir, ignore_errors=True)
+
+    def on_close(choice):
+        if choice == 'hide':
+            flags['visible'] = False
+            window.hide()
+        elif choice == 'exit':
+            flags['exit'] = True
+            window.destroy()
+
+    api._bind(window, on_close)
+
+    def on_closing():
+        if flags['exit']:
+            return True
+        # Ask in the page; returning False keeps the window open until the user picks.
+        try:
+            window.evaluate_js('window.CCGuard && window.CCGuard.askClose()')
+        except Exception:
+            flags['exit'] = True
+            return True
+        return False
+
+    window.events.closing += on_closing
+
+    def watcher():
+        api._note('启动', '监测已启动（WebView 面板）')
+        if hidden:
+            api._note('面板', '已隐藏到托盘，监测继续')
+        threading.Thread(target=store.loop, daemon=True).start()
+        while not store.stop.is_set():
+            api._observe()
+            overall = store.read().get('overall', 'unknown')
+            if flags['shown'] and flags.get('icon') != overall:
+                if set_native_icon(window, overall if overall in engine.STATES else 'unknown'):
+                    flags['icon'] = overall
+            if show_path.exists():
+                try:
+                    show_path.unlink()
+                except OSError:
+                    pass
+                flags['visible'] = True
+                window.show()
+                window.restore()
+            if box['child'] is not None and box['child'].poll() is not None:
+                box['child'] = None
+                if not flags['visible']:
+                    flags['visible'] = True
+                    window.show()
+                    api._notice = '托盘已退出，面板已恢复显示'
+            store.stop.wait(1.0)
+
+    try:
+        webview.start(watcher, gui='edgechromium' if platform.system() == 'Windows' else None,
+                      private_mode=True)
+    except Exception as error:
+        stop_everything()
+        shared.release_single_instance()
+        if not flags['shown']:
+            raise Unavailable('WebView 无法启动：' + str(error)) from None
+        raise
+    stop_everything()
+
+
+def launch(cfg, config_path, tray=False, start_hidden=False, ui='auto', web=run, tk=None):
+    """Prefer the WebView panel; fall back to tkinter when it is unavailable (ui='auto')."""
+    tk = tk or shared.run
+    if ui == 'tk':
+        return tk(cfg, config_path, tray=tray, start_hidden=start_hidden)
+    try:
+        return web(cfg, config_path, tray=tray, start_hidden=start_hidden)
+    except Unavailable as error:
+        if ui == 'web':
+            raise engine.MonitorError(str(error)) from None
+        return tk(cfg, config_path, tray=tray, start_hidden=start_hidden)
