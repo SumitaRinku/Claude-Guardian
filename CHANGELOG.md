@@ -10,6 +10,7 @@
 - 文档：README 中英文新增“版本与更新”（查看版本、检查更新、升级、更新日志、版本号规则、发布步骤），更新 `runtime_config` 留空的含义与故障排查；`monitor.md` 写明自动查找的位置和范围
 - 测试：`test_monitor.py` 新增运行配置自动查找回归（找到、找不到、显式路径优先、不跨客户端、无客户端取最新、只对有明确位置的预设查找、不泄露路径），旧用例隔离 `APPDATA` 以免受本机 FlClash 影响；新增 `tests/test_app_update.py`；`test_monitor_webview.py` 新增关于页、检查更新与发布页白名单；`test_windows_build.py` 新增版本唯一来源与发布标签校验；`tests/monitor-panel.cjs` 新增更新结果转换
 - 验证：Windows 11 本机 `python -m unittest discover -s tests` 1832 项通过（442 项 POSIX 专属跳过）；Node 页面测试、`compileall` 与两次打包字节一致通过。用安装版首次运行生成的真实配置（`runtime_config` 为空）复现：修复前三项为“未知”，修复后读到 FlClash 运行配置，核心 IPv6 正常、DNS 接管正常、严格路由降级（与 FlClash 实际 `strict-route: false` 一致），状态里不含路径。`monitor.py --version` 输出 `CCGuard 0.6.0`；`update-check` 实际请求 GitHub，返回“已是最新”。本机隔离 venv 构建 exe，自检 21 项全过（含版本与更新日志一致）。WebView 面板“关于”页用替身更新结果截图核对。安装程序由 CI 构建与验证，结果见发布记录
+- 发布：`v0.6.0`（提交 `6047538`，代码与 `aa544b5` 相同）。`CCGuard-Setup-0.6.0.exe` 由 `Windows installer` 工作流在发布时构建并附上（标签与 `version.py` 一致才构建），SHA-256 `79a03f54dd518807b2847ba28cfaddb803e439278199a667110f917d6b50182d`；`claude-guardian-0.6.0.zip` SHA-256 `9360ebeafef26e7c57da9a74f029d3afa97465aed6fb2018a1059d55184a8359`；两份 SHA256SUMS 随附，下载回的资产哈希一致。发布构建在 CI 上通过打包自检 21 项、静默安装、安装后自检、静默卸载；推送 CI 在 Linux、macOS（首次未分配到运行器被取消，重跑通过）、Windows 与 Python 3.10 Linux 通过。发布后实测检查更新：以 0.5.1 查询返回新版本 0.6.0 并带安装程序链接，以 0.6.0 查询返回已是最新
 - 风险与回滚：检查更新依赖 GitHub 公开接口（未登录每小时 60 次）；自动查找只覆盖两种客户端，其他客户端仍需填写路径。回滚使用普通 revert
 
 ## 安装向导中文（2026-11-17，MONITOR-EXE-ZH-20261117）
